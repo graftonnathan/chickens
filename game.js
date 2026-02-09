@@ -35,6 +35,9 @@ class Game {
         // Fence destruction and repair mechanic
         this.fenceHoleManager = new FenceHoleManager();
         
+        // Egg collection basket at house
+        this.basketItem = new BasketItem();
+        
         // Bonus text animations
         this.bonusTexts = [];
         
