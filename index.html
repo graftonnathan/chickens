@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chickens - Catch the Fugitives!</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="hud">
+            <div class="hud-item">
+                <span class="hud-label">SCORE</span>
+                <span id="score" class="hud-value">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">LIVES</span>
+                <span id="lives" class="hud-value">3</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">TIME</span>
+                <span id="time" class="hud-value">0:00</span>
+            </div>
+        </div>
+        
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div class="controls-hint">WASD or Arrow Keys to Move</div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="overlay">
+        <div class="overlay-content">
+            <h1>🐔 CHICKENS</h1>
+            <p class="tagline">Catch the fugitives before they escape!</p>
+            <div class="instructions">
+                <p>🎮 Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move</p>
+                <p>🏃 Catch chickens before they reach the fence</p>
+                <p>❤️ You have 3 lives - don't let chickens escape!</p>
+            </div>
+            <button id="startBtn" class="btn-primary">Start Game</button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="overlay hidden">
+        <div class="overlay-content">
+            <h1>GAME OVER</h1>
+            <p class="final-score">Score: <span id="finalScore">0</span></p>
+            <p class="high-score">High Score: <span id="highScore">0</span></p>
+            <p class="stats">Time: <span id="finalTime">0:00</span></p>
+            <button id="restartBtn" class="btn-primary">Play Again</button>
+        </div>
+    </div>
+
+    <script src="input.js"></script>
+    <script src="collision.js"></script>
+    <script src="particle.js"></script>
+    <script src="chicken.js"></script>
+    <script src="coop.js"></script>
+    <script src="hero.js"></script>
+    <script src="spawner.js"></script>
+    <script src="renderer.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
