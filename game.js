@@ -38,18 +38,29 @@ class Game {
     }
 
     bindUI() {
-        document.getElementById('startBtn').addEventListener('click', () => {
-            this.start();
-        });
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
         
-        document.getElementById('restartBtn').addEventListener('click', () => {
-            this.start();
-        });
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                this.start();
+            });
+        }
         
-        // Space key to start/restart game
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && (this.state === 'menu' || this.state === 'gameOver')) {
+        if (restartBtn) {
+            restartBtn.addEventListener('click', () => {
+                this.start();
+            });
+        }
+        
+        // Space key to start/restart game - use document and check both code and key
+        document.addEventListener('keydown', (e) => {
+            const isSpace = e.code === 'Space' || e.key === ' ' || e.keyCode === 32;
+            const canStart = this.state === 'menu' || this.state === 'gameOver';
+            
+            if (isSpace && canStart) {
                 e.preventDefault();
+                e.stopPropagation();
                 this.start();
             }
         });
