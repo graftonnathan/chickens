@@ -128,7 +128,14 @@ class Game {
         // Update hero
         this.hero.update(deltaTime, this.input, this.chickens, this.particles);
         
-        // Check for deposit at coop
+        // Fence collision - prevent hero from entering coop enclosure (except through gap)
+        const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius);
+        if (!fenceResult.inGap) {
+            this.hero.x = fenceResult.x;
+            this.hero.y = fenceResult.y;
+        }
+        
+        // Check for deposit at coop (through gap)
         this.checkDeposit();
         
         // Update spawner
@@ -161,8 +168,8 @@ class Game {
     }
     
     checkDeposit() {
-        // If hero is in deposit zone and carrying chickens
-        if (this.coop.isInDepositZone(this.hero.x, this.hero.y)) {
+        // If hero is in deposit zone (at fence gap) and carrying chickens
+        if (this.coop.isAtDepositZone(this.hero)) {
             const deposited = this.hero.deposit();
             if (deposited > 0) {
                 this.depositedCount += deposited;
@@ -291,6 +298,11 @@ class Game {
         
         // Draw hero (with carried chickens)
         this.hero.draw(this.ctx);
+        
+        // Draw deposit hint when at gap with chickens
+        if (this.state === 'playing') {
+            this.coop.drawDepositHint(this.ctx, this.hero);
+        }
         
         // Draw other particles
         this.particles.particles.filter(p => !(p instanceof PawPrint)).forEach(p => p.draw(this.ctx));

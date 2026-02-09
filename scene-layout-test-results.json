@@ -1,0 +1,11 @@
+{
+  "sceneLayout": {
+    "error": "Game not found"
+  },
+  "chickenAnimation": {},
+  "screenshots": [
+    "scene-initial.png",
+    "scene-after-5sec.png"
+  ],
+  "overall": "FAIL"
+}
