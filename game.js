@@ -1,5 +1,6 @@
 /**
- * Game - Main game class
+ * Game - Main game class with carrying mechanic
+ * Coop at NORTH, House at SOUTH
  */
 class Game {
     constructor() {
@@ -10,15 +11,17 @@ class Game {
         this.particles = new ParticleSystem();
         
         // Game state
-        this.state = 'menu'; // menu, playing, gameOver
+        this.state = 'menu'; // menu, playing, gameOver, win
         this.score = 0;
+        this.depositedCount = 0; // Total chickens deposited
+        this.winTarget = 50; // Need to deposit 50 chickens to win
         this.lives = 3;
         this.gameTime = 0;
         this.highScore = this.loadHighScore();
         
-        // Entities - positioned for backyard setting
-        this.hero = new Hero(400, 480); // Start at bottom of yard
-        this.coop = new Coop(720, 520); // Garden shed in bottom right corner
+        // Entities - FLIPPED: coop at NORTH, house at SOUTH
+        this.hero = new Hero(400, 450); // Start in middle-bottom area
+        this.coop = new Coop(400, 50); // Garden shed at NORTH
         this.spawner = new Spawner(this.coop);
         this.chickens = [];
         
@@ -53,10 +56,10 @@ class Game {
             });
         }
         
-        // Space key to start/restart game - use document and check both code and key
+        // Space key to start/restart game
         document.addEventListener('keydown', (e) => {
             const isSpace = e.code === 'Space' || e.key === ' ' || e.keyCode === 32;
-            const canStart = this.state === 'menu' || this.state === 'gameOver';
+            const canStart = this.state === 'menu' || this.state === 'gameOver' || this.state === 'win';
             
             if (isSpace && canStart) {
                 e.preventDefault();
@@ -69,12 +72,13 @@ class Game {
     start() {
         this.state = 'playing';
         this.score = 0;
+        this.depositedCount = 0;
         this.lives = 3;
         this.gameTime = 0;
         this.chickens = [];
         this.raccoons = [];
         this.bonusTexts = [];
-        this.hero = new Hero(400, 480); // Bottom of backyard
+        this.hero = new Hero(400, 450); // Start in yard
         this.spawner.reset();
         this.raccoonSpawner.reset();
         this.particles = new ParticleSystem();
@@ -87,9 +91,27 @@ class Game {
         this.state = 'gameOver';
         this.saveHighScore();
         
-        document.getElementById('finalScore').textContent = this.score;
+        document.getElementById('finalScore').textContent = this.depositedCount;
         document.getElementById('highScore').textContent = this.highScore;
         document.getElementById('finalTime').textContent = this.formatTime(this.gameTime);
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+    }
+    
+    gameWin() {
+        this.state = 'win';
+        this.saveHighScore();
+        
+        // Update win screen text
+        const gameOverTitle = document.querySelector('#gameOverScreen h1');
+        if (gameOverTitle) gameOverTitle.textContent = 'YOU WIN!';
+        
+        document.getElementById('finalScore').textContent = this.depositedCount;
+        document.getElementById('highScore').textContent = this.highScore;
+        document.getElementById('finalTime').textContent = this.formatTime(this.gameTime);
+        
+        const restartBtn = document.getElementById('restartBtn');
+        if (restartBtn) restartBtn.textContent = 'Play Again';
+        
         document.getElementById('gameOverScreen').classList.remove('hidden');
     }
 
@@ -103,8 +125,11 @@ class Game {
         
         this.gameTime += deltaTime;
         
-        // Update hero (pass chickens for proximity glow and particles for trail)
+        // Update hero
         this.hero.update(deltaTime, this.input, this.chickens, this.particles);
+        
+        // Check for deposit at coop
+        this.checkDeposit();
         
         // Update spawner
         if (this.spawner.update(deltaTime, this.chickens)) {
@@ -112,35 +137,9 @@ class Game {
         }
         
         // Update chickens
-        this.chickens = this.chickens.filter(chicken => {
-            chicken.update(deltaTime);
-            
-            // Check if caught
-            if (Collision.circleCircle(this.hero.getBounds(), chicken.getBounds())) {
-                this.score += 10;
-                this.particles.spawnMagicBurst(chicken.x, chicken.y);
-                this.updateUI();
-                return false; // Remove caught chicken
-            }
-            
-            // Check if escaped (backyard boundaries with fences)
-            if (Collision.outsideBounds(chicken.getBounds(), {
-                left: 25, right: 775, top: 180, bottom: 575
-            })) {
-                this.lives--;
-                this.particles.spawn(chicken.x, chicken.y, 'escape', 10);
-                this.updateUI();
-                
-                if (this.lives <= 0) {
-                    this.gameOver();
-                }
-                return false; // Remove escaped chicken
-            }
-            
-            return true;
-        });
+        this.updateChickens(deltaTime);
         
-        // Update raccoon spawner and raccoons
+        // Update raccoons
         this.updateRaccoons(deltaTime);
         
         // Update bonus texts
@@ -153,7 +152,58 @@ class Game {
         // Update particles
         this.particles.update();
         
+        // Check win condition
+        if (this.depositedCount >= this.winTarget) {
+            this.gameWin();
+        }
+        
         this.updateUI();
+    }
+    
+    checkDeposit() {
+        // If hero is in deposit zone and carrying chickens
+        if (this.coop.isInDepositZone(this.hero.x, this.hero.y)) {
+            const deposited = this.hero.deposit();
+            if (deposited > 0) {
+                this.depositedCount += deposited;
+                this.score += deposited * 20; // 20 points per deposited chicken
+                this.addBonusText(this.hero.x, this.hero.y - 30, `+${deposited * 20}`);
+                
+                // Deposit particles
+                for (let i = 0; i < deposited; i++) {
+                    this.particles.spawnMagicBurst(this.coop.x + (Math.random() - 0.5) * 40, this.coop.y + 20);
+                }
+            }
+        }
+    }
+    
+    updateChickens(deltaTime) {
+        this.chickens = this.chickens.filter(chicken => {
+            chicken.update(deltaTime);
+            
+            // Check if hero can pick up chicken
+            if (this.hero.canCarry() && 
+                Collision.circleCircle(this.hero.getBounds(), chicken.getBounds())) {
+                if (this.hero.tryPickup(chicken)) {
+                    // Pickup particles
+                    this.particles.spawn(chicken.x, chicken.y, 'catch', 8);
+                    return false; // Remove picked up chicken
+                }
+            }
+            
+            // Check if chicken reached the HOUSE (south) - ESCAPE
+            if (chicken.y > 550) {
+                this.lives--;
+                this.particles.spawn(chicken.x, chicken.y, 'escape', 10);
+                
+                if (this.lives <= 0) {
+                    this.gameOver();
+                }
+                return false; // Remove escaped chicken
+            }
+            
+            return true;
+        });
     }
     
     updateRaccoons(deltaTime) {
@@ -173,26 +223,29 @@ class Game {
                 raccoon.intercept(this.particles);
                 this.score += 50;
                 this.addBonusText(raccoon.x, raccoon.y, '+50');
-                this.updateUI();
                 
                 // Remove after fleeing
                 setTimeout(() => {
                     this.raccoons = this.raccoons.filter(r => r !== raccoon);
                 }, 1000);
-                return true; // Keep for flee animation
+                return true;
             }
             
             // Check if raccoon reached the coop
             if (raccoon.state === 'moving' && raccoon.checkReachedTarget()) {
-                // Raccoon reached coop - lose a life!
+                // Raccoon reached coop - lose ALL carried chickens!
+                const stolen = this.hero.deposit(); // Actually steals carried chickens
                 this.lives--;
                 this.particles.spawn(raccoon.x, raccoon.y, 'escape', 15);
-                this.updateUI();
+                
+                if (stolen > 0) {
+                    this.addBonusText(raccoon.x, raccoon.y, `-${stolen} STOLEN!`);
+                }
                 
                 if (this.lives <= 0) {
                     this.gameOver();
                 }
-                return false; // Remove raccoon
+                return false;
             }
             
             // Remove if escaped (fled off screen)
@@ -224,10 +277,10 @@ class Game {
             this.drawSpawnWarning();
         }
         
-        // Draw coop
+        // Draw coop at NORTH
         this.coop.draw(this.ctx);
         
-        // Draw paw print trail particles first (so they're under raccoon)
+        // Draw paw print trails
         this.particles.particles.filter(p => p instanceof PawPrint).forEach(p => p.draw(this.ctx));
         
         // Draw raccoons
@@ -236,7 +289,7 @@ class Game {
         // Draw chickens
         this.chickens.forEach(chicken => chicken.draw(this.ctx));
         
-        // Draw hero
+        // Draw hero (with carried chickens)
         this.hero.draw(this.ctx);
         
         // Draw other particles
@@ -251,20 +304,30 @@ class Game {
         const alpha = 0.3 + progress * 0.5;
         const pulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
         
-        // Red warning overlay at spawn area
-        this.ctx.save();
-        this.ctx.globalAlpha = alpha * pulse;
-        this.ctx.fillStyle = '#ff0000';
-        this.ctx.beginPath();
-        this.ctx.arc(400, 575, 40 + progress * 20, 0, Math.PI * 2);
-        this.ctx.fill();
+        // Show warning at all three possible spawn sides
+        const warningPositions = [
+            {x: 400, y: 30, label: 'N'},   // North
+            {x: 770, y: 300, label: 'E'},  // East
+            {x: 30, y: 300, label: 'W'}    // West
+        ];
         
-        // Warning text
-        this.ctx.globalAlpha = 1;
-        this.ctx.fillStyle = '#ff0000';
-        this.ctx.font = 'bold 16px monospace';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('!', 400, 580);
+        this.ctx.save();
+        
+        warningPositions.forEach(pos => {
+            this.ctx.globalAlpha = alpha * pulse;
+            this.ctx.fillStyle = '#ff0000';
+            this.ctx.beginPath();
+            this.ctx.arc(pos.x, pos.y, 25, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Warning text
+            this.ctx.globalAlpha = 1;
+            this.ctx.fillStyle = '#ff0000';
+            this.ctx.font = 'bold 14px monospace';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('!', pos.x, pos.y + 5);
+        });
+        
         this.ctx.restore();
     }
     
@@ -272,20 +335,27 @@ class Game {
         this.ctx.save();
         this.bonusTexts.forEach(text => {
             this.ctx.globalAlpha = text.life;
-            this.ctx.fillStyle = '#ffd700';
-            this.ctx.font = 'bold 20px monospace';
+            this.ctx.fillStyle = text.text.includes('STOLEN') ? '#ff4444' : '#ffd700';
+            this.ctx.font = 'bold 18px monospace';
             this.ctx.textAlign = 'center';
             this.ctx.shadowBlur = 10;
-            this.ctx.shadowColor = '#ff8c00';
+            this.ctx.shadowColor = text.text.includes('STOLEN') ? '#ff0000' : '#ff8c00';
             this.ctx.fillText(text.text, text.x, text.y);
         });
         this.ctx.restore();
     }
 
     updateUI() {
-        document.getElementById('score').textContent = this.score;
+        document.getElementById('score').textContent = this.depositedCount + '/' + this.winTarget;
         document.getElementById('lives').textContent = this.lives;
         document.getElementById('time').textContent = this.formatTime(this.gameTime);
+        
+        // Update bag indicator
+        const bagDisplay = document.getElementById('bagDisplay');
+        if (bagDisplay) {
+            const count = this.hero.getCarryCount();
+            bagDisplay.textContent = '🐔'.repeat(count) + '○'.repeat(2 - count);
+        }
     }
 
     formatTime(seconds) {
@@ -304,8 +374,8 @@ class Game {
     }
 
     saveHighScore() {
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
+        if (this.depositedCount > this.highScore) {
+            this.highScore = this.depositedCount;
             try {
                 localStorage.setItem('chickens_highscore', this.highScore.toString());
             } catch (e) {}

@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chickens - Catch the Fugitives!</title>
+    <title>Chickens - Wizard's Backyard!</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
         <div class="hud">
             <div class="hud-item">
-                <span class="hud-label">SCORE</span>
-                <span id="score" class="hud-value">0</span>
+                <span class="hud-label">DEPOSITED</span>
+                <span id="score" class="hud-value">0/50</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">BAG</span>
+                <span id="bagDisplay" class="hud-value bag-indicator">○○</span>
             </div>
             <div class="hud-item">
                 <span class="hud-label">LIVES</span>
@@ -25,18 +29,21 @@
         
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         
-        <div class="controls-hint">WASD or Arrow Keys to Move</div>
+        <div class="controls-hint">WASD to Move • Carry 2 max • Deposit at Coop</div>
     </div>
 
     <!-- Start Screen -->
     <div id="startScreen" class="overlay">
         <div class="overlay-content">
-            <h1>🐔 CHICKENS</h1>
-            <p class="tagline">Catch the fugitives before they escape!</p>
+            <h1>🧙‍♂️ WIZARD'S CHICKENS</h1>
+            <p class="tagline">Carry chickens to the coop before they escape!</p>
             <div class="instructions">
                 <p>🎮 Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move</p>
-                <p>🏃 Catch chickens before they reach the fence</p>
-                <p>❤️ You have 3 lives - don't let chickens escape!</p>
+                <p>🐔 Pick up chickens (max <strong>2</strong> in your bag)</p>
+                <p>🏠 Carry them to the <strong>coop</strong> at the north fence</p>
+                <p>🦝 Stop <strong>raccoons</strong> from reaching the coop</p>
+                <p>🎯 Deposit <strong>50 chickens</strong> to win!</p>
+                <p>❤️ Don't let chickens reach the house or raccoons steal!</p>
             </div>
             <button id="startBtn" class="btn-primary">Start Game</button>
         </div>
@@ -46,22 +53,22 @@
     <div id="gameOverScreen" class="overlay hidden">
         <div class="overlay-content">
             <h1>GAME OVER</h1>
-            <p class="final-score">Score: <span id="finalScore">0</span></p>
+            <p class="final-score">Chickens Saved: <span id="finalScore">0</span></p>
             <p class="high-score">High Score: <span id="highScore">0</span></p>
             <p class="stats">Time: <span id="finalTime">0:00</span></p>
             <button id="restartBtn" class="btn-primary">Play Again</button>
         </div>
     </div>
 
-    <script src="input.js?v=2"></script>
-    <script src="collision.js?v=2"></script>
-    <script src="particle.js?v=2"></script>
-    <script src="chicken.js?v=2"></script>
-    <script src="coop.js?v=2"></script>
-    <script src="raccoon.js?v=2"></script>
-    <script src="hero.js?v=2"></script>
-    <script src="spawner.js?v=2"></script>
-    <script src="renderer.js?v=2"></script>
-    <script src="game.js?v=2"></script>
+    <script src="input.js"></script>
+    <script src="collision.js"></script>
+    <script src="particle.js"></script>
+    <script src="chicken.js"></script>
+    <script src="coop.js"></script>
+    <script src="raccoon.js"></script>
+    <script src="hero.js"></script>
+    <script src="spawner.js"></script>
+    <script src="renderer.js"></script>
+    <script src="game.js"></script>
 </body>
 </html>

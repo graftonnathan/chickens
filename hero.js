@@ -1,12 +1,13 @@
 /**
- * Hero class - The Wizard!
+ * Hero class - The Wizard with Carrying Mechanic!
  */
 class Hero {
     constructor(x, y) {
         this.x = x;
         this.y = y;
         this.radius = 22;
-        this.speed = 220; // slightly slower for wizard feel
+        this.baseSpeed = 220;
+        this.speed = this.baseSpeed;
         this.vx = 0;
         this.vy = 0;
         this.facing = 0; // angle in radians
@@ -17,10 +18,20 @@ class Hero {
         
         // Proximity glow
         this.glowIntensity = 0;
+        
+        // Carrying mechanic
+        this.carrying = []; // Array of carried chickens (max 2)
+        this.maxCarry = 2;
+        this.carrySpeedPenalty = 0.20; // 20% slower when carrying
     }
 
     update(deltaTime, input, chickens, particleSystem) {
         const move = input.getMovementVector();
+        
+        // Calculate speed based on carry load
+        const carryCount = this.carrying.length;
+        const speedMultiplier = 1 - (carryCount * this.carrySpeedPenalty);
+        this.speed = this.baseSpeed * speedMultiplier;
         
         this.vx = move.dx * this.speed;
         this.vy = move.dy * this.speed;
@@ -49,8 +60,40 @@ class Hero {
             }
         }
         
-        // Calculate proximity glow
-        this.updateGlow(chickens);
+        // Calculate proximity glow (only when not carrying max)
+        if (carryCount < this.maxCarry) {
+            this.updateGlow(chickens);
+        } else {
+            this.glowIntensity = 0;
+        }
+    }
+    
+    // Try to pick up a chicken
+    tryPickup(chicken) {
+        if (this.carrying.length < this.maxCarry) {
+            this.carrying.push({
+                color: ['#fff', '#ffeb3b', '#ff9800'][Math.floor(Math.random() * 3)]
+            });
+            return true;
+        }
+        return false;
+    }
+    
+    // Deposit all carried chickens
+    deposit() {
+        const count = this.carrying.length;
+        this.carrying = [];
+        return count;
+    }
+    
+    // Check if can carry more
+    canCarry() {
+        return this.carrying.length < this.maxCarry;
+    }
+    
+    // Get carry count for HUD
+    getCarryCount() {
+        return this.carrying.length;
     }
     
     updateGlow(chickens) {
@@ -92,8 +135,8 @@ class Hero {
         ctx.ellipse(0, 20, 18, 6, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Proximity glow (magic hands)
-        if (this.glowIntensity > 0) {
+        // Proximity glow (magic hands) - only when can carry more
+        if (this.glowIntensity > 0 && this.canCarry()) {
             const glowRadius = 30 + Math.sin(this.time * 8) * 5;
             const gradient = ctx.createRadialGradient(0, 0, 5, 0, 0, glowRadius);
             gradient.addColorStop(0, `rgba(0, 255, 255, ${0.4 * this.glowIntensity})`);
@@ -103,6 +146,11 @@ class Hero {
             ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
             ctx.fill();
         }
+        
+        // Draw carried chickens FIRST (behind wizard)
+        this.carrying.forEach((chicken, index) => {
+            this.drawCarriedChicken(ctx, index, chicken.color);
+        });
         
         // Staff (drawn behind body)
         const staffBob = Math.sin(this.time * 2 + 1) * 3;
@@ -216,8 +264,8 @@ class Hero {
         
         ctx.restore();
         
-        // Hands (glowing when near chickens)
-        if (this.glowIntensity > 0) {
+        // Hands (glowing when near chickens and can carry)
+        if (this.glowIntensity > 0 && this.canCarry()) {
             ctx.fillStyle = `rgba(0, 255, 255, ${0.6 + this.glowIntensity * 0.4})`;
         } else {
             ctx.fillStyle = '#ffdbac';
@@ -225,6 +273,49 @@ class Hero {
         ctx.beginPath();
         ctx.arc(-10, 0, 4, 0, Math.PI * 2);
         ctx.arc(10, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
+    
+    // Draw a chicken being carried
+    drawCarriedChicken(ctx, index, color) {
+        const offsetX = index === 0 ? -18 : 18;
+        const offsetY = -30;
+        
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(0.5, 0.5);
+        
+        // Body
+        ctx.fillStyle = color || '#fff';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Head
+        ctx.beginPath();
+        ctx.arc(8, -8, 7, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Beak
+        ctx.fillStyle = '#ffa500';
+        ctx.beginPath();
+        ctx.moveTo(14, -8);
+        ctx.lineTo(18, -6);
+        ctx.lineTo(14, -4);
+        ctx.fill();
+        
+        // Eye
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(10, -10, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Comb
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(8, -14, 3, Math.PI, 0);
         ctx.fill();
         
         ctx.restore();

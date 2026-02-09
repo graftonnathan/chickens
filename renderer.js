@@ -1,5 +1,6 @@
 /**
- * Renderer - Handles all Canvas 2D drawing for residential backyard
+ * Renderer - Handles all Canvas 2D drawing for flipped residential backyard
+ * Coop is now at NORTH, House at SOUTH
  */
 class Renderer {
     constructor(canvas) {
@@ -13,38 +14,35 @@ class Renderer {
         // Draw sky
         this.drawSky();
         
-        // Draw house at the top (back of yard)
-        this.drawHouse();
+        // Draw coop at NORTH (top)
+        // Coop is drawn separately in game.js
         
-        // Draw lawn with mowing stripes
+        // Draw lawn with VERTICAL mowing stripes (N-S flow)
         this.drawLawn();
         
-        // Draw patio area
-        this.drawPatio();
+        // Draw fence around coop area (semi-circle barrier)
+        this.drawCoopFence();
         
-        // Draw privacy fence borders
-        this.drawPrivacyFence();
+        // Draw house at SOUTH (bottom)
+        this.drawHouse();
         
-        // Draw front hedge
-        this.drawFrontHedge();
-        
-        // Draw backyard props
+        // Draw backyard props scattered around
         this.drawProps();
     }
 
     drawSky() {
         // Sky gradient
-        const gradient = this.ctx.createLinearGradient(0, 0, 0, 150);
+        const gradient = this.ctx.createLinearGradient(0, 0, 0, 200);
         gradient.addColorStop(0, '#87CEEB');
         gradient.addColorStop(0.7, '#B0E0E6');
         gradient.addColorStop(1, '#E0F6FF');
         this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0, 0, this.width, 150);
+        this.ctx.fillRect(0, 0, this.width, 200);
         
         // Draw some clouds
-        this.drawCloud(100, 40, 30);
-        this.drawCloud(600, 60, 40);
-        this.drawCloud(450, 30, 25);
+        this.drawCloud(150, 50, 35);
+        this.drawCloud(550, 40, 40);
+        this.drawCloud(350, 70, 30);
     }
     
     drawCloud(x, y, size) {
@@ -57,15 +55,91 @@ class Renderer {
         this.ctx.fill();
     }
 
+    drawLawn() {
+        // Base lawn color
+        this.ctx.fillStyle = '#4CAF50';
+        this.ctx.fillRect(0, 100, this.width, this.height - 100);
+        
+        // VERTICAL mowing stripes - reinforce N-S flow
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.15;
+        for (let x = 0; x < this.width; x += 50) {
+            this.ctx.fillStyle = (x / 50) % 2 === 0 ? '#388E3C' : '#66BB6A';
+            this.ctx.fillRect(x, 100, 50, this.height - 100);
+        }
+        this.ctx.restore();
+        
+        // Add some random grass variation
+        for (let i = 0; i < 100; i++) {
+            const x = Math.random() * this.width;
+            const y = 100 + Math.random() * (this.height - 100);
+            this.ctx.fillStyle = Math.random() > 0.5 ? '#43A047' : '#66BB6A';
+            this.ctx.fillRect(x, y, 2, 2);
+        }
+    }
+
+    drawCoopFence() {
+        // White picket fence semi-circle around coop at y=50
+        const coopX = 400;
+        const coopY = 50;
+        const fenceRadius = 100;
+        
+        this.ctx.save();
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.lineWidth = 3;
+        
+        // Draw picket fence posts in semi-circle (bottom half, blocking south)
+        const numPosts = 12;
+        for (let i = 0; i <= numPosts; i++) {
+            const angle = Math.PI + (i / numPosts) * Math.PI; // Bottom semi-circle
+            const x = coopX + Math.cos(angle) * fenceRadius;
+            const y = coopY + Math.sin(angle) * fenceRadius * 0.6; // Elliptical
+            
+            // Picket post
+            this.ctx.fillRect(x - 3, y - 20, 6, 25);
+            
+            // Pointy top
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - 3, y - 20);
+            this.ctx.lineTo(x, y - 28);
+            this.ctx.lineTo(x + 3, y - 20);
+            this.ctx.closePath();
+            this.ctx.fill();
+        }
+        
+        // Horizontal rails
+        this.ctx.strokeStyle = '#E0E0E0';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(coopX, coopY, fenceRadius - 5, Math.PI, 0);
+        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.arc(coopX, coopY, fenceRadius - 15, Math.PI, 0);
+        this.ctx.stroke();
+        
+        this.ctx.restore();
+        
+        // Deposit zone indicator (subtle glow inside fence)
+        const gradient = this.ctx.createRadialGradient(coopX, coopY, 20, coopX, coopY, 80);
+        gradient.addColorStop(0, 'rgba(255, 215, 0, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(coopX, coopY, 80, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
     drawHouse() {
-        const houseY = 100;
+        // House at SOUTH (y=550 area)
+        const houseY = 520;
         const houseHeight = 80;
         
         // House wall (beige siding)
         this.ctx.fillStyle = '#F5F5DC';
         this.ctx.fillRect(250, houseY, 300, houseHeight);
         
-        // Siding lines
+        // Siding lines - horizontal
         this.ctx.strokeStyle = '#E8E8D0';
         this.ctx.lineWidth = 1;
         for (let y = houseY + 10; y < houseY + houseHeight; y += 10) {
@@ -75,242 +149,69 @@ class Renderer {
             this.ctx.stroke();
         }
         
-        // Sliding glass door (chicken spawn point)
+        // Sliding glass door (at bottom, facing north toward coop)
         this.ctx.fillStyle = '#87CEEB';
-        this.ctx.fillRect(350, houseY + 20, 100, 60);
+        this.ctx.fillRect(350, houseY, 100, 50);
         
         // Door frame
         this.ctx.strokeStyle = '#8B7355';
         this.ctx.lineWidth = 4;
-        this.ctx.strokeRect(350, houseY + 20, 100, 60);
+        this.ctx.strokeRect(350, houseY, 100, 50);
         
         // Vertical door divider
         this.ctx.beginPath();
-        this.ctx.moveTo(400, houseY + 20);
-        this.ctx.lineTo(400, houseY + 80);
+        this.ctx.moveTo(400, houseY);
+        this.ctx.lineTo(400, houseY + 50);
         this.ctx.stroke();
         
         // Glass reflection lines
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
-        this.ctx.moveTo(360, houseY + 30);
-        this.ctx.lineTo(390, houseY + 70);
-        this.ctx.moveTo(410, houseY + 30);
-        this.ctx.lineTo(440, houseY + 70);
+        this.ctx.moveTo(360, houseY + 10);
+        this.ctx.lineTo(390, houseY + 40);
+        this.ctx.moveTo(410, houseY + 10);
+        this.ctx.lineTo(440, houseY + 40);
         this.ctx.stroke();
         
         // Door handle
         this.ctx.fillStyle = '#C0C0C0';
         this.ctx.beginPath();
-        this.ctx.arc(395, houseY + 50, 3, 0, Math.PI * 2);
+        this.ctx.arc(395, houseY + 25, 3, 0, Math.PI * 2);
         this.ctx.fill();
         
         // House trim
         this.ctx.fillStyle = '#8B4513';
         this.ctx.fillRect(245, houseY - 5, 310, 5);
         
-        // Steps from door
+        // Steps leading down from door (toward coop)
         this.ctx.fillStyle = '#A0A0A0';
-        this.ctx.fillRect(340, houseY + 80, 120, 10);
+        this.ctx.fillRect(340, houseY + 50, 120, 8);
         this.ctx.fillStyle = '#909090';
-        this.ctx.fillRect(330, houseY + 90, 140, 8);
-    }
-
-    drawLawn() {
-        // Base lawn color
-        this.ctx.fillStyle = '#4CAF50';
-        this.ctx.fillRect(0, 180, this.width, this.height - 180);
-        
-        // Mowing stripes - vertical lines with alternating brightness
-        this.ctx.save();
-        this.ctx.globalAlpha = 0.15;
-        for (let x = 0; x < this.width; x += 40) {
-            this.ctx.fillStyle = (x / 40) % 2 === 0 ? '#388E3C' : '#66BB6A';
-            this.ctx.fillRect(x, 180, 40, this.height - 180);
-        }
-        this.ctx.restore();
-        
-        // Add some random grass variation
-        for (let i = 0; i < 50; i++) {
-            const x = Math.random() * this.width;
-            const y = 180 + Math.random() * (this.height - 180);
-            this.ctx.fillStyle = Math.random() > 0.5 ? '#43A047' : '#66BB6A';
-            this.ctx.fillRect(x, y, 2, 2);
-        }
-    }
-
-    drawPatio() {
-        // Concrete patio near the house
-        const patioY = 200;
-        const patioHeight = 100;
-        
-        this.ctx.fillStyle = '#B0B0B0';
-        this.ctx.fillRect(100, patioY, 600, patioHeight);
-        
-        // Patio tile pattern
-        this.ctx.strokeStyle = '#A0A0A0';
-        this.ctx.lineWidth = 1;
-        
-        // Horizontal lines
-        for (let y = patioY; y <= patioY + patioHeight; y += 25) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(100, y);
-            this.ctx.lineTo(700, y);
-            this.ctx.stroke();
-        }
-        
-        // Vertical lines (offset for brick pattern)
-        for (let x = 100; x <= 700; x += 50) {
-            const offset = ((x - 100) / 50) % 2 === 0 ? 0 : 12.5;
-            for (let y = patioY + offset; y < patioY + patioHeight; y += 25) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(x, y);
-                this.ctx.lineTo(x, y + 12.5);
-                this.ctx.stroke();
-            }
-        }
-        
-        // Patio furniture - Table and chairs
-        this.drawPatioFurniture(600, 250);
-    }
-    
-    drawPatioFurniture(x, y) {
-        // Table
-        this.ctx.fillStyle = '#8B4513';
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, 20, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Table legs
-        this.ctx.strokeStyle = '#654321';
-        this.ctx.lineWidth = 3;
-        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 2) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(x + Math.cos(angle) * 15, y + Math.sin(angle) * 15);
-            this.ctx.lineTo(x + Math.cos(angle) * 25, y + Math.sin(angle) * 25 + 15);
-            this.ctx.stroke();
-        }
-        
-        // Chairs
-        const chairOffsets = [
-            {x: -35, y: 0, angle: 0},
-            {x: 35, y: 0, angle: Math.PI},
-            {x: 0, y: -35, angle: Math.PI / 2}
-        ];
-        
-        chairOffsets.forEach(chair => {
-            this.ctx.save();
-            this.ctx.translate(x + chair.x, y + chair.y);
-            this.ctx.rotate(chair.angle);
-            
-            // Chair seat
-            this.ctx.fillStyle = '#A0522D';
-            this.ctx.fillRect(-8, -12, 16, 24);
-            
-            // Chair back
-            this.ctx.fillRect(-8, -25, 16, 13);
-            
-            this.ctx.restore();
-        });
-    }
-
-    drawPrivacyFence() {
-        // Wood privacy fence on sides and back
-        const fenceColor = '#8B7355';
-        const postColor = '#6B5344';
-        
-        // Left fence
-        this.drawFenceSection(0, 150, 20, this.height - 150, true);
-        
-        // Right fence
-        this.drawFenceSection(this.width - 20, 150, 20, this.height - 150, true);
-        
-        // Back fence (bottom)
-        this.drawFenceSection(0, this.height - 20, this.width, 20, false);
-    }
-    
-    drawFenceSection(x, y, width, height, isVertical) {
-        // Fence posts
-        this.ctx.fillStyle = '#6B5344';
-        if (isVertical) {
-            for (let py = y; py < y + height; py += 60) {
-                this.ctx.fillRect(x - 2, py, width + 4, 8);
-            }
-        } else {
-            for (let px = x; px < x + width; px += 80) {
-                this.ctx.fillRect(px, y - 2, 8, height + 4);
-            }
-        }
-        
-        // Fence boards
-        this.ctx.fillStyle = '#8B7355';
-        if (isVertical) {
-            // Vertical boards
-            for (let i = 0; i < 3; i++) {
-                const bx = x + 2 + i * 6;
-                this.ctx.fillRect(bx, y, 5, height);
-            }
-            // Top and bottom rails
-            this.ctx.fillStyle = '#6B5344';
-            this.ctx.fillRect(x, y + 20, width, 4);
-            this.ctx.fillRect(x, y + height - 30, width, 4);
-        } else {
-            // Horizontal boards
-            for (let i = 0; i < 3; i++) {
-                const by = y + i * 6;
-                this.ctx.fillRect(x, by, width, 5);
-            }
-        }
-    }
-
-    drawFrontHedge() {
-        // Front hedge along the bottom (decorative, not a barrier)
-        const hedgeY = this.height - 25;
-        
-        this.ctx.fillStyle = '#2E7D32';
-        
-        // Draw hedge as rounded bushes
-        const bushWidth = 60;
-        for (let x = 0; x < this.width + bushWidth; x += bushWidth - 10) {
-            this.ctx.beginPath();
-            this.ctx.arc(x, hedgeY + 15, 25, Math.PI, 0);
-            this.ctx.arc(x + 20, hedgeY + 10, 30, Math.PI, 0);
-            this.ctx.arc(x + 40, hedgeY + 15, 25, Math.PI, 0);
-            this.ctx.fill();
-        }
-        
-        // Hedge highlight
-        this.ctx.fillStyle = '#4CAF50';
-        for (let x = 0; x < this.width + bushWidth; x += bushWidth - 10) {
-            this.ctx.beginPath();
-            this.ctx.arc(x + 5, hedgeY + 10, 15, Math.PI, 0);
-            this.ctx.arc(x + 25, hedgeY + 5, 18, Math.PI, 0);
-            this.ctx.fill();
-        }
+        this.ctx.fillRect(330, houseY + 58, 140, 6);
     }
 
     drawProps() {
-        // Garden gnome
-        this.drawGnome(120, 450);
+        // Garden gnome - placed in middle area
+        this.drawGnome(150, 300);
         
-        // Pink flamingo
-        this.drawFlamingo(720, 480);
+        // Pink flamingo - middle right
+        this.drawFlamingo(650, 350);
         
-        // Grill
-        this.drawGrill(180, 300);
+        // Grill - near house
+        this.drawGrill(180, 480);
         
-        // Flower pots
-        this.drawFlowerPot(280, 220);
-        this.drawFlowerPot(520, 220);
+        // Flower pots - scattered
+        this.drawFlowerPot(300, 250);
+        this.drawFlowerPot(500, 280);
         
-        // Tree (for shade)
-        this.drawTree(60, 320);
+        // Tree - left side for shade
+        this.drawTree(80, 200);
     }
     
     drawGnome(x, y) {
         // Body
-        this.ctx.fillStyle = '#4169E1'; // Blue coat
+        this.ctx.fillStyle = '#4169E1';
         this.ctx.beginPath();
         this.ctx.ellipse(x, y, 12, 15, 0, 0, Math.PI * 2);
         this.ctx.fill();
@@ -362,26 +263,26 @@ class Renderer {
         // Neck
         this.ctx.beginPath();
         this.ctx.moveTo(x + 8, y - 12);
-        this.ctx.quadraticCurveTo(x + 20, y - 20, x + 15, y - 30);
+        this.ctx.quadraticCurveTo(x + 20, y - 20, x + 15, y - 32);
         this.ctx.lineWidth = 4;
         this.ctx.strokeStyle = '#FF69B4';
         this.ctx.stroke();
         
         // Head
         this.ctx.beginPath();
-        this.ctx.arc(x + 15, y - 32, 5, 0, Math.PI * 2);
+        this.ctx.arc(x + 15, y - 34, 5, 0, Math.PI * 2);
         this.ctx.fill();
         
         // Beak
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.beginPath();
-        this.ctx.moveTo(x + 19, y - 32);
-        this.ctx.lineTo(x + 26, y - 30);
-        this.ctx.lineTo(x + 19, y - 28);
+        this.ctx.moveTo(x + 19, y - 34);
+        this.ctx.lineTo(x + 26, y - 32);
+        this.ctx.lineTo(x + 19, y - 30);
         this.ctx.fill();
         this.ctx.fillStyle = '#000000';
         this.ctx.beginPath();
-        this.ctx.arc(x + 20, y - 30, 1, 0, Math.PI * 2);
+        this.ctx.arc(x + 20, y - 32, 1, 0, Math.PI * 2);
         this.ctx.fill();
     }
     
@@ -465,5 +366,42 @@ class Renderer {
             this.ctx.arc(x + offsets[i], y - 10, sizes[i], 0, Math.PI * 2);
             this.ctx.fill();
         });
+    }
+    
+    // Draw chicken carried by hero
+    drawCarriedChicken(ctx, x, y, offsetIndex) {
+        const offsetX = offsetIndex === 0 ? -12 : 12;
+        const offsetY = -25;
+        
+        ctx.save();
+        ctx.translate(x + offsetX, y + offsetY);
+        ctx.scale(0.6, 0.6); // Smaller when carried
+        
+        // Body
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Head
+        ctx.beginPath();
+        ctx.arc(8, -8, 7, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Beak
+        ctx.fillStyle = '#ffa500';
+        ctx.beginPath();
+        ctx.moveTo(14, -8);
+        ctx.lineTo(18, -6);
+        ctx.lineTo(14, -4);
+        ctx.fill();
+        
+        // Comb
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(8, -14, 4, Math.PI, 0);
+        ctx.fill();
+        
+        ctx.restore();
     }
 }

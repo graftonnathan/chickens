@@ -1,5 +1,5 @@
 /**
- * Chicken class - The fugitives!
+ * Chicken class - Now moves SOUTH toward the house
  */
 class Chicken {
     constructor(x, y) {
@@ -7,13 +7,13 @@ class Chicken {
         this.y = y;
         this.radius = 15;
         
-        // Random direction outward from center
-        const angle = Math.random() * Math.PI * 2;
-        this.vx = Math.cos(angle);
-        this.vy = Math.sin(angle);
+        // Direction: mostly south with slight random variation
+        const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Down with some spread
+        this.vx = Math.cos(angle) * 0.3; // Slight horizontal drift
+        this.vy = Math.sin(angle); // Mostly down
         
         // Random speed
-        this.speed = 80 + Math.random() * 70; // 80-150 pixels/sec
+        this.speed = 60 + Math.random() * 50; // 60-110 pixels/sec
         
         // Animation
         this.waddleOffset = Math.random() * Math.PI * 2;

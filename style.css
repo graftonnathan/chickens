@@ -72,6 +72,11 @@ body {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+.bag-indicator {
+    font-size: 20px;
+    letter-spacing: 4px;
+}
+
 /* Canvas */
 #gameCanvas {
     border: 6px solid var(--wood-brown);

@@ -1,5 +1,6 @@
 /**
  * Raccoon class - Enemy that tries to reach the coop
+ * Now spawns from NORTH, EAST, or WEST
  */
 class Raccoon {
     constructor(x, y, targetX, targetY) {
@@ -8,7 +9,7 @@ class Raccoon {
         this.targetX = targetX;
         this.targetY = targetY;
         this.radius = 18;
-        this.speed = 120; // pixels per second (faster than chickens)
+        this.speed = 130; // faster than chickens
         
         // State: 'spawning', 'moving', 'fleeing', 'escaped'
         this.state = 'spawning';
@@ -76,7 +77,7 @@ class Raccoon {
         const dx = this.targetX - this.x;
         const dy = this.targetY - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        return distance < 30;
+        return distance < 40;
     }
 
     intercept(particleSystem) {
@@ -232,23 +233,19 @@ class Raccoon {
 }
 
 /**
- * RaccoonSpawner - Manages raccoon spawning with accelerated intervals
+ * RaccoonSpawner - Manages raccoon spawning from 3 sides (N, E, W)
  */
 class RaccoonSpawner {
     constructor(coop) {
         this.coop = coop;
         this.spawnTimer = 0;
-        this.baseSpawnRate = 15; // 15 seconds initially
+        this.baseSpawnRate = 12; // 12 seconds initially
         this.currentSpawnRate = this.baseSpawnRate;
-        this.minSpawnRate = 5; // floor at 5 seconds
-        this.spawnAcceleration = 0.95; // 5% faster each time
-        this.warningTime = 3; // 3 second warning before spawn
+        this.minSpawnRate = 4; // floor at 4 seconds
+        this.spawnAcceleration = 0.96; // 4% faster each time
+        this.warningTime = 2.5; // 2.5 second warning before spawn
         this.warningActive = false;
         this.nextSpawnTime = this.currentSpawnRate;
-        
-        // Spawn position (over back fence)
-        this.spawnX = 400; // center of bottom fence
-        this.spawnY = 575;
     }
 
     update(deltaTime, raccoons) {
@@ -276,18 +273,37 @@ class RaccoonSpawner {
     }
 
     spawnRaccoon() {
-        return new Raccoon(
-            this.spawnX + (Math.random() - 0.5) * 100, // Random position along fence
-            this.spawnY,
-            this.coop.x,
-            this.coop.y
-        );
+        // Choose random side: NORTH (0), EAST (1), or WEST (2)
+        const side = Math.floor(Math.random() * 3);
+        let spawnX, spawnY;
+        
+        switch(side) {
+            case 0: // NORTH (top edge, but not too close to coop)
+                spawnX = 100 + Math.random() * 600;
+                spawnY = 20;
+                break;
+            case 1: // EAST (right edge)
+                spawnX = 780;
+                spawnY = 150 + Math.random() * 300;
+                break;
+            case 2: // WEST (left edge)
+                spawnX = 20;
+                spawnY = 150 + Math.random() * 300;
+                break;
+        }
+        
+        return new Raccoon(spawnX, spawnY, this.coop.x, this.coop.y);
     }
 
     getWarningProgress() {
         if (!this.warningActive) return 0;
         const timeUntilSpawn = this.nextSpawnTime - this.spawnTimer;
         return 1 - (timeUntilSpawn / this.warningTime);
+    }
+    
+    getWarningSide() {
+        // Return which side will spawn (for UI indicator)
+        return Math.floor(Math.random() * 3);
     }
 
     reset() {
