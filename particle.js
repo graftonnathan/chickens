@@ -307,6 +307,49 @@ class StarBurst {
     }
 }
 
+/**
+ * WoodParticle - Wood debris from fence punch
+ */
+class WoodParticle {
+    constructor(x, y, angle, speed) {
+        this.x = x;
+        this.y = y;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.01;
+        this.size = 3 + Math.random() * 4;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 0.3;
+        // Wood colors
+        const woodColors = ['#8b4513', '#a0522d', '#cd853f', '#8b5a2b'];
+        this.color = woodColors[Math.floor(Math.random() * woodColors.length)];
+        this.gravity = 0.3;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.vx *= 0.98; // air resistance
+        this.rotation += this.rotationSpeed;
+        this.life -= this.decay;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        
+        // Draw wood splinter (rectangle)
+        ctx.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+        
+        ctx.restore();
+    }
+}
+
 class ParticleSystem {
     constructor() {
         this.particles = [];
@@ -341,6 +384,10 @@ class ParticleSystem {
         for (let i = 0; i < 15; i++) {
             this.particles.push(new StarBurst(x, y));
         }
+    }
+
+    spawnWoodParticle(x, y, angle, speed) {
+        this.particles.push(new WoodParticle(x, y, angle, speed));
     }
 
     update() {
