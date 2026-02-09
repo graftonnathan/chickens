@@ -44,9 +44,9 @@ class Hero {
             this.facing = Math.atan2(move.dy, move.dx);
         }
         
-        // Keep in bounds
-        this.x = Math.max(this.radius, Math.min(800 - this.radius, this.x));
-        this.y = Math.max(this.radius, Math.min(600 - this.radius, this.y));
+        // Keep in bounds (within fences: x=40-760, y=80-500)
+        this.x = Math.max(40 + this.radius, Math.min(760 - this.radius, this.x));
+        this.y = Math.max(80 + this.radius, Math.min(500 - this.radius, this.y));
         
         // Update animation time
         this.time += deltaTime;

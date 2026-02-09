@@ -1,6 +1,6 @@
 /**
- * Renderer - Handles all Canvas 2D drawing for flipped residential backyard
- * Coop is now at NORTH, House at SOUTH
+ * Renderer - Handles all Canvas 2D drawing for enclosed backyard
+ * Coop on ground, N/E/W fences, house roof on south
  */
 class Renderer {
     constructor(canvas) {
@@ -14,17 +14,16 @@ class Renderer {
         // Draw sky
         this.drawSky();
         
-        // Draw coop at NORTH (top)
-        // Coop is drawn separately in game.js
+        // Draw N/E/W fences
+        this.drawNorthFence();
+        this.drawEastFence();
+        this.drawWestFence();
         
-        // Draw lawn with VERTICAL mowing stripes (N-S flow)
+        // Draw lawn
         this.drawLawn();
         
-        // Draw fence around coop area (semi-circle barrier)
-        this.drawCoopFence();
-        
-        // Draw house at SOUTH (bottom)
-        this.drawHouse();
+        // Draw house roof (south wall)
+        this.drawHouseRoof();
         
         // Draw backyard props scattered around
         this.drawProps();
@@ -55,158 +54,199 @@ class Renderer {
         this.ctx.fill();
     }
 
+    drawNorthFence() {
+        // North fence - horizontal at top
+        const fenceY = 40;
+        const fenceHeight = 40;
+        const picketWidth = 8;
+        const picketGap = 4;
+        
+        this.ctx.fillStyle = '#ffffff';
+        
+        // Horizontal rails
+        this.ctx.fillRect(0, fenceY + 10, this.width, 6);
+        this.ctx.fillRect(0, fenceY + 25, this.width, 6);
+        
+        // Vertical pickets with pointed tops
+        for (let px = 0; px < this.width; px += picketWidth + picketGap) {
+            // Picket body
+            this.ctx.fillRect(px, fenceY, picketWidth, fenceHeight);
+            
+            // Pointed top
+            this.ctx.beginPath();
+            this.ctx.moveTo(px, fenceY);
+            this.ctx.lineTo(px + picketWidth / 2, fenceY - 8);
+            this.ctx.lineTo(px + picketWidth, fenceY);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            // Shadow/outline
+            this.ctx.strokeStyle = '#e0e0e0';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(px, fenceY, picketWidth, fenceHeight);
+        }
+        
+        // Shadow on south side
+        this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        this.ctx.fillRect(0, fenceY + fenceHeight, this.width, 5);
+    }
+
+    drawEastFence() {
+        // East fence - vertical on right side
+        const fenceX = 760;
+        const fenceY = 40;
+        const fenceHeight = 520; // From top fence to house
+        const fenceWidth = 40;
+        const picketWidth = 8;
+        const picketGap = 4;
+        
+        this.ctx.fillStyle = '#ffffff';
+        
+        // Vertical rails
+        this.ctx.fillRect(fenceX + 10, fenceY, 6, fenceHeight);
+        this.ctx.fillRect(fenceX + 25, fenceY, 6, fenceHeight);
+        
+        // Horizontal pickets
+        for (let py = fenceY; py < fenceY + fenceHeight; py += picketWidth + picketGap) {
+            this.ctx.fillRect(fenceX, py, fenceWidth, picketWidth);
+            
+            // Pointed top (pointing right - outward)
+            this.ctx.beginPath();
+            this.ctx.moveTo(fenceX + fenceWidth, py);
+            this.ctx.lineTo(fenceX + fenceWidth + 8, py + picketWidth / 2);
+            this.ctx.lineTo(fenceX + fenceWidth, py + picketWidth);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            // Outline
+            this.ctx.strokeStyle = '#e0e0e0';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(fenceX, py, fenceWidth, picketWidth);
+        }
+    }
+
+    drawWestFence() {
+        // West fence - vertical on left side
+        const fenceX = 0;
+        const fenceY = 40;
+        const fenceHeight = 520;
+        const fenceWidth = 40;
+        const picketWidth = 8;
+        const picketGap = 4;
+        
+        this.ctx.fillStyle = '#ffffff';
+        
+        // Vertical rails
+        this.ctx.fillRect(fenceX + 10, fenceY, 6, fenceHeight);
+        this.ctx.fillRect(fenceX + 25, fenceY, 6, fenceHeight);
+        
+        // Horizontal pickets
+        for (let py = fenceY; py < fenceY + fenceHeight; py += picketWidth + picketGap) {
+            this.ctx.fillRect(fenceX, py, fenceWidth, picketWidth);
+            
+            // Pointed top (pointing left - outward)
+            this.ctx.beginPath();
+            this.ctx.moveTo(fenceX, py);
+            this.ctx.lineTo(fenceX - 8, py + picketWidth / 2);
+            this.ctx.lineTo(fenceX, py + picketWidth);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            // Outline
+            this.ctx.strokeStyle = '#e0e0e0';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(fenceX, py, fenceWidth, picketWidth);
+        }
+    }
+
     drawLawn() {
         // Base lawn color
         this.ctx.fillStyle = '#4CAF50';
-        this.ctx.fillRect(0, 100, this.width, this.height - 100);
+        this.ctx.fillRect(40, 80, 720, 420);
         
-        // VERTICAL mowing stripes - reinforce N-S flow
+        // Vertical mowing stripes
         this.ctx.save();
         this.ctx.globalAlpha = 0.15;
-        for (let x = 0; x < this.width; x += 50) {
+        for (let x = 40; x < 760; x += 50) {
             this.ctx.fillStyle = (x / 50) % 2 === 0 ? '#388E3C' : '#66BB6A';
-            this.ctx.fillRect(x, 100, 50, this.height - 100);
+            this.ctx.fillRect(x, 80, 50, 420);
         }
         this.ctx.restore();
         
         // Add some random grass variation
         for (let i = 0; i < 100; i++) {
-            const x = Math.random() * this.width;
-            const y = 100 + Math.random() * (this.height - 100);
+            const x = 40 + Math.random() * 720;
+            const y = 80 + Math.random() * 420;
             this.ctx.fillStyle = Math.random() > 0.5 ? '#43A047' : '#66BB6A';
             this.ctx.fillRect(x, y, 2, 2);
         }
     }
 
-    drawCoopFence() {
-        // White picket fence semi-circle around coop at y=50
-        const coopX = 400;
-        const coopY = 50;
-        const fenceRadius = 100;
+    drawHouseRoof() {
+        // House roof - triangle peak on south wall
+        const roofColor = '#8b4513';
+        const roofDark = '#5d4037';
+        const sidingColor = '#f5f5f5';
+        const sidingLines = '#e0e0e0';
         
-        this.ctx.save();
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.lineWidth = 3;
-        
-        // Draw picket fence posts in semi-circle (bottom half, blocking south)
-        const numPosts = 12;
-        for (let i = 0; i <= numPosts; i++) {
-            const angle = Math.PI + (i / numPosts) * Math.PI; // Bottom semi-circle
-            const x = coopX + Math.cos(angle) * fenceRadius;
-            const y = coopY + Math.sin(angle) * fenceRadius * 0.6; // Elliptical
-            
-            // Picket post
-            this.ctx.fillRect(x - 3, y - 20, 6, 25);
-            
-            // Pointy top
-            this.ctx.beginPath();
-            this.ctx.moveTo(x - 3, y - 20);
-            this.ctx.lineTo(x, y - 28);
-            this.ctx.lineTo(x + 3, y - 20);
-            this.ctx.closePath();
-            this.ctx.fill();
-        }
-        
-        // Horizontal rails
-        this.ctx.strokeStyle = '#E0E0E0';
-        this.ctx.lineWidth = 2;
+        // Roof triangle
+        this.ctx.fillStyle = roofColor;
         this.ctx.beginPath();
-        this.ctx.arc(coopX, coopY, fenceRadius - 5, Math.PI, 0);
-        this.ctx.stroke();
-        this.ctx.beginPath();
-        this.ctx.arc(coopX, coopY, fenceRadius - 15, Math.PI, 0);
-        this.ctx.stroke();
-        
-        this.ctx.restore();
-        
-        // Deposit zone indicator (subtle glow inside fence)
-        const gradient = this.ctx.createRadialGradient(coopX, coopY, 20, coopX, coopY, 80);
-        gradient.addColorStop(0, 'rgba(255, 215, 0, 0.2)');
-        gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(coopX, coopY, 80, 0, Math.PI * 2);
+        this.ctx.moveTo(0, 600);
+        this.ctx.lineTo(400, 500);
+        this.ctx.lineTo(800, 600);
+        this.ctx.closePath();
         this.ctx.fill();
-    }
-
-    drawHouse() {
-        // House at SOUTH (y=550 area)
-        const houseY = 520;
-        const houseHeight = 80;
         
-        // House wall (beige siding)
-        this.ctx.fillStyle = '#F5F5DC';
-        this.ctx.fillRect(250, houseY, 300, houseHeight);
+        // Roof outline
+        this.ctx.strokeStyle = roofDark;
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
         
-        // Siding lines - horizontal
-        this.ctx.strokeStyle = '#E8E8D0';
+        // Roof shingles texture
+        this.ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         this.ctx.lineWidth = 1;
-        for (let y = houseY + 10; y < houseY + houseHeight; y += 10) {
+        for (let i = 1; i < 6; i++) {
+            const y = 500 + i * 16;
+            const leftX = (i * 16) * (400 / 100);
+            const rightX = 800 - (i * 16) * (400 / 100);
             this.ctx.beginPath();
-            this.ctx.moveTo(250, y);
-            this.ctx.lineTo(550, y);
+            this.ctx.moveTo(leftX, y);
+            this.ctx.lineTo(rightX, y);
             this.ctx.stroke();
         }
         
-        // Sliding glass door (at bottom, facing north toward coop)
-        this.ctx.fillStyle = '#87CEEB';
-        this.ctx.fillRect(350, houseY, 100, 50);
+        // Siding below roof (extends off-screen)
+        this.ctx.fillStyle = sidingColor;
+        this.ctx.fillRect(0, 600, 800, 100);
         
-        // Door frame
-        this.ctx.strokeStyle = '#8B7355';
-        this.ctx.lineWidth = 4;
-        this.ctx.strokeRect(350, houseY, 100, 50);
-        
-        // Vertical door divider
-        this.ctx.beginPath();
-        this.ctx.moveTo(400, houseY);
-        this.ctx.lineTo(400, houseY + 50);
-        this.ctx.stroke();
-        
-        // Glass reflection lines
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(360, houseY + 10);
-        this.ctx.lineTo(390, houseY + 40);
-        this.ctx.moveTo(410, houseY + 10);
-        this.ctx.lineTo(440, houseY + 40);
-        this.ctx.stroke();
-        
-        // Door handle
-        this.ctx.fillStyle = '#C0C0C0';
-        this.ctx.beginPath();
-        this.ctx.arc(395, houseY + 25, 3, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // House trim
-        this.ctx.fillStyle = '#8B4513';
-        this.ctx.fillRect(245, houseY - 5, 310, 5);
-        
-        // Steps leading down from door (toward coop)
-        this.ctx.fillStyle = '#A0A0A0';
-        this.ctx.fillRect(340, houseY + 50, 120, 8);
-        this.ctx.fillStyle = '#909090';
-        this.ctx.fillRect(330, houseY + 58, 140, 6);
+        // Siding lines
+        this.ctx.strokeStyle = sidingLines;
+        this.ctx.lineWidth = 1;
+        for (let y = 610; y < 700; y += 10) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(800, y);
+            this.ctx.stroke();
+        }
     }
 
     drawProps() {
         // Garden gnome - placed in middle area
-        this.drawGnome(150, 300);
+        this.drawGnome(150, 200);
         
         // Pink flamingo - middle right
-        this.drawFlamingo(650, 350);
+        this.drawFlamingo(650, 250);
         
         // Grill - near house
         this.drawGrill(180, 480);
         
         // Flower pots - scattered
-        this.drawFlowerPot(300, 250);
-        this.drawFlowerPot(500, 280);
+        this.drawFlowerPot(300, 150);
+        this.drawFlowerPot(500, 180);
         
         // Tree - left side for shade
-        this.drawTree(80, 200);
+        this.drawTree(100, 150);
     }
     
     drawGnome(x, y) {

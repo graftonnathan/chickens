@@ -19,9 +19,9 @@ class Game {
         this.gameTime = 0;
         this.highScore = this.loadHighScore();
         
-        // Entities - FLIPPED: coop at NORTH, house at SOUTH
-        this.hero = new Hero(400, 450); // Start in middle-bottom area
-        this.coop = new Coop(400, 50); // Garden shed at NORTH
+        // Entities - Coop on ground at NORTH, House roof at SOUTH
+        this.hero = new Hero(400, 350); // Start in middle area (within fences)
+        this.coop = new Coop(400, 80); // Garden shed on ground below north fence
         this.spawner = new Spawner(this.coop);
         this.chickens = [];
         
@@ -78,7 +78,7 @@ class Game {
         this.chickens = [];
         this.raccoons = [];
         this.bonusTexts = [];
-        this.hero = new Hero(400, 450); // Start in yard
+        this.hero = new Hero(400, 350); // Start in yard (within fence bounds)
         this.spawner.reset();
         this.raccoonSpawner.reset();
         this.particles = new ParticleSystem();
@@ -191,8 +191,8 @@ class Game {
                 }
             }
             
-            // Check if chicken reached the HOUSE (south) - ESCAPE
-            if (chicken.y > 550) {
+            // Check if chicken reached the HOUSE ROOF (south) - ESCAPE at y > 500
+            if (chicken.y > 500) {
                 this.lives--;
                 this.particles.spawn(chicken.x, chicken.y, 'escape', 10);
                 
@@ -304,11 +304,11 @@ class Game {
         const alpha = 0.3 + progress * 0.5;
         const pulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
         
-        // Show warning at all three possible spawn sides
+        // Show warning at all three possible spawn sides (outside fences)
         const warningPositions = [
-            {x: 400, y: 30, label: 'N'},   // North
-            {x: 770, y: 300, label: 'E'},  // East
-            {x: 30, y: 300, label: 'W'}    // West
+            {x: 400, y: 20, label: 'N'},   // North (above fence)
+            {x: 790, y: 300, label: 'E'},  // East (outside fence)
+            {x: 10, y: 300, label: 'W'}    // West (outside fence)
         ];
         
         this.ctx.save();

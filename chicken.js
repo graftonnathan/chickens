@@ -1,84 +1,166 @@
 /**
- * Chicken class - Now moves SOUTH toward the house
+ * Chicken class - Realistic hop/pause movement with weave animation
  */
 class Chicken {
     constructor(x, y) {
+        // Base position (center line for weave)
+        this.baseX = x;
         this.x = x;
         this.y = y;
         this.radius = 15;
         
-        // Direction: mostly south with slight random variation
-        const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Down with some spread
-        this.vx = Math.cos(angle) * 0.3; // Slight horizontal drift
-        this.vy = Math.sin(angle); // Mostly down
+        // Weave (side-to-side sine wave)
+        this.weaveAmplitude = 15; // Max pixels from center
+        this.weaveFrequency = 2 + Math.random() * 2; // Random 2-4 Hz
+        this.weavePhase = Math.random() * Math.PI * 2;
+        this.weaveTime = 0;
         
-        // Random speed
-        this.speed = 60 + Math.random() * 50; // 60-110 pixels/sec
+        // Hop cycle
+        this.hopState = 'pause'; // 'pause' | 'hop'
+        this.hopTimer = 0;
+        this.hopDuration = 0.15; // 150ms hop
+        this.pauseDuration = 0.1; // 100ms pause
+        this.hopDistance = 15; // Pixels per hop
         
-        // Animation
-        this.waddleOffset = Math.random() * Math.PI * 2;
-        this.waddleSpeed = 10 + Math.random() * 5;
+        // Random variation per chicken
+        this.hopDuration += (Math.random() - 0.5) * 0.05;
+        this.pauseDuration += (Math.random() - 0.5) * 0.05;
+        
+        // Visual animation offsets
+        this.bounceY = 0;
+        this.headLag = 0;
+        this.wingAngle = 0;
+        
+        // For carrying
+        this.color = ['#fff', '#ffeb3b', '#ff9800'][Math.floor(Math.random() * 3)];
     }
 
     update(deltaTime) {
-        this.x += this.vx * this.speed * deltaTime;
-        this.y += this.vy * this.speed * deltaTime;
-        this.waddleOffset += this.waddleSpeed * deltaTime;
+        // Update weave (continuous sine wave for X)
+        this.weaveTime += deltaTime;
+        const weaveOffset = Math.sin(
+            this.weaveTime * this.weaveFrequency + this.weavePhase
+        ) * this.weaveAmplitude;
+        this.x = this.baseX + weaveOffset;
+        
+        // Update hop cycle
+        this.hopTimer += deltaTime;
+        
+        if (this.hopState === 'hop') {
+            // During hop
+            const hopProgress = Math.min(this.hopTimer / this.hopDuration, 1);
+            
+            // Vertical bounce (parabolic arc)
+            this.bounceY = -12 * Math.sin(hopProgress * Math.PI);
+            
+            // Wing flap (rapid oscillation)
+            this.wingAngle = Math.sin(hopProgress * Math.PI * 4) * 0.4;
+            
+            // Head lag (slightly behind body movement)
+            const lagProgress = Math.max(0, hopProgress - 0.2);
+            this.headLag = Math.sin(lagProgress * Math.PI) * 3;
+            
+            if (this.hopTimer >= this.hopDuration) {
+                // End of hop - move forward
+                this.y += this.hopDistance;
+                this.hopState = 'pause';
+                this.hopTimer = 0;
+                this.bounceY = 0;
+                this.wingAngle = 0;
+                this.headLag = 0;
+            }
+        } else {
+            // During pause
+            // Idle bob (breathing motion)
+            this.bounceY = Math.sin(this.weaveTime * 10) * 1;
+            this.wingAngle = 0;
+            this.headLag = 0;
+            
+            if (this.hopTimer >= this.pauseDuration) {
+                // Start next hop
+                this.hopState = 'hop';
+                this.hopTimer = 0;
+            }
+        }
     }
 
     draw(ctx) {
+        const drawX = this.x;
+        const drawY = this.y + this.bounceY;
+        
         ctx.save();
-        ctx.translate(this.x, this.y);
         
-        // Waddle effect
-        const waddle = Math.sin(this.waddleOffset) * 0.1;
-        ctx.rotate(waddle);
-        
-        // Body
-        ctx.fillStyle = '#fff';
+        // Shadow (on ground, not bouncing with chicken)
+        const shadowAlpha = this.hopState === 'hop' ? 0.08 : 0.15;
+        const shadowScale = this.hopState === 'hop' ? 0.8 : 1.0;
+        ctx.fillStyle = `rgba(0,0,0,${shadowAlpha})`;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(drawX, this.y + 10, 12 * shadowScale, 4 * shadowScale, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Head
+        // Body
+        ctx.fillStyle = this.color;
         ctx.beginPath();
-        ctx.arc(8, -8, 7, 0, Math.PI * 2);
+        ctx.ellipse(drawX, drawY, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Wing (with flap animation)
+        ctx.save();
+        ctx.translate(drawX - 5, drawY);
+        ctx.rotate(this.wingAngle);
+        ctx.fillStyle = this.color === '#fff' ? '#f5f5f5' : this.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        
+        // Head (with lag)
+        const headX = drawX + this.headLag;
+        const headY = drawY - 8;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(headX, headY, 7, 0, Math.PI * 2);
         ctx.fill();
         
         // Beak
         ctx.fillStyle = '#ffa500';
         ctx.beginPath();
-        ctx.moveTo(14, -8);
-        ctx.lineTo(18, -6);
-        ctx.lineTo(14, -4);
+        ctx.moveTo(headX + 5, headY - 2);
+        ctx.lineTo(headX + 12, headY);
+        ctx.lineTo(headX + 5, headY + 2);
+        ctx.closePath();
         ctx.fill();
         
         // Eye
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = '#000000';
         ctx.beginPath();
-        ctx.arc(10, -10, 2, 0, Math.PI * 2);
+        ctx.arc(headX + 3, headY - 2, 2, 0, Math.PI * 2);
         ctx.fill();
         
         // Comb (red thing on head)
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
-        ctx.arc(8, -14, 4, Math.PI, 0);
+        ctx.arc(headX, headY - 7, 4, Math.PI, 0);
         ctx.fill();
         
-        // Wings
-        ctx.fillStyle = '#f0f0f0';
-        ctx.beginPath();
-        ctx.ellipse(-3, 2, 6, 4, Math.sin(this.waddleOffset) * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Legs
+        // Legs (different during hop vs pause)
         ctx.strokeStyle = '#ffa500';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(-4, 8);
-        ctx.lineTo(-4, 14);
-        ctx.moveTo(4, 8);
-        ctx.lineTo(4, 14);
+        
+        if (this.hopState === 'hop') {
+            // Tucked legs during hop
+            ctx.moveTo(drawX - 5, drawY + 8);
+            ctx.lineTo(drawX - 3, drawY + 5);
+            ctx.moveTo(drawX + 5, drawY + 8);
+            ctx.lineTo(drawX + 3, drawY + 5);
+        } else {
+            // Standing legs during pause
+            ctx.moveTo(drawX - 5, drawY + 8);
+            ctx.lineTo(drawX - 5, drawY + 15);
+            ctx.moveTo(drawX + 5, drawY + 8);
+            ctx.lineTo(drawX + 5, drawY + 15);
+        }
         ctx.stroke();
         
         ctx.restore();

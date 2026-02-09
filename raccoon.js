@@ -278,17 +278,17 @@ class RaccoonSpawner {
         let spawnX, spawnY;
         
         switch(side) {
-            case 0: // NORTH (top edge, but not too close to coop)
+            case 0: // NORTH (top edge, above fence)
                 spawnX = 100 + Math.random() * 600;
                 spawnY = 20;
                 break;
-            case 1: // EAST (right edge)
-                spawnX = 780;
-                spawnY = 150 + Math.random() * 300;
+            case 1: // EAST (right edge, outside fence)
+                spawnX = 810;
+                spawnY = 100 + Math.random() * 400;
                 break;
-            case 2: // WEST (left edge)
-                spawnX = 20;
-                spawnY = 150 + Math.random() * 300;
+            case 2: // WEST (left edge, outside fence)
+                spawnX = -10;
+                spawnY = 100 + Math.random() * 400;
                 break;
         }
         
