@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-02-09T14:09:54.507Z",
+  "ticket": "TICKET-1770640678846-chickens",
+  "project": "chickens",
+  "tester": "dummy",
+  "tests": [
+    {
+      "step": 1,
+      "name": "Game loads",
+      "status": "pass"
+    },
+    {
+      "step": 2,
+      "name": "Backyard elements implemented",
+      "status": "pass",
+      "details": {
+        "sky": true,
+        "house": true,
+        "lawn": true,
+        "patio": true,
+        "fence": true,
+        "hedge": true,
+        "gnome": true,
+        "flamingo": true,
+        "grill": false,
+        "shed": true
+      }
+    },
+    {
+      "step": 3,
+      "name": "Game displays backyard",
+      "status": "pass"
+    },
+    {
+      "step": 4,
+      "name": "House has sliding door",
+      "status": "pass",
+      "details": {
+        "hasSlidingDoor": true
+      }
+    },
+    {
+      "step": 5,
+      "name": "Lawn has mowing stripes",
+      "status": "pass",
+      "details": {
+        "hasLawnStripes": true
+      }
+    },
+    {
+      "step": 6,
+      "name": "Garden shed has details",
+      "status": "pass",
+      "details": {
+        "tools": true,
+        "flowerBed": true
+      }
+    },
+    {
+      "step": 7,
+      "name": "Patio has furniture",
+      "status": "fail",
+      "details": {
+        "table": false,
+        "chairs": true
+      }
+    },
+    {
+      "step": 8,
+      "name": "Gameplay works in backyard",
+      "status": "pass"
+    }
+  ],
+  "screenshots": [
+    "/home/molten/.openclaw/workspace/PROJECTS/chickens/screenshots/backyard-test-01-initial.png",
+    "/home/molten/.openclaw/workspace/PROJECTS/chickens/screenshots/backyard-test-02-game.png",
+    "/home/molten/.openclaw/workspace/PROJECTS/chickens/screenshots/backyard-test-03-gameplay.png"
+  ],
+  "success": false,
+  "summary": {
+    "total": 8,
+    "passed": 7,
+    "failed": 1,
+    "successRate": "88%"
+  }
+}

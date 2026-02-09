@@ -45,6 +45,14 @@ class Game {
         document.getElementById('restartBtn').addEventListener('click', () => {
             this.start();
         });
+        
+        // Space key to start/restart game
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && (this.state === 'menu' || this.state === 'gameOver')) {
+                e.preventDefault();
+                this.start();
+            }
+        });
     }
 
     start() {
