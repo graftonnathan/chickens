@@ -38,6 +38,10 @@ class Hero {
         this.maxFood = 5;
         this.isFeeding = false;
         this.feedingTimer = 0;
+        
+        // Carry animation for chickens
+        this.carryAnimationTime = 0;
+        this.carryBobOffset = [0, 0]; // Per-chicken bob offsets
     }
 
     update(deltaTime, input, chickens, particleSystem) {
@@ -66,6 +70,16 @@ class Hero {
         
         // Update animation time
         this.time += deltaTime;
+        
+        // Update carry animation for chickens
+        this.carryAnimationTime += deltaTime;
+        this.carrySlots.forEach((slot, index) => {
+            if (slot === 'chicken') {
+                // Each chicken bobs with slightly different phase (180 degrees offset for 2nd)
+                const phase = index * Math.PI;
+                this.carryBobOffset[index] = Math.sin(this.carryAnimationTime * 8 + phase) * 3; // 3px amplitude, 8Hz
+            }
+        });
         
         // Spawn trail particles when moving
         if ((move.dx !== 0 || move.dy !== 0) && particleSystem) {
@@ -232,17 +246,16 @@ class Hero {
             ctx.fill();
         }
         
-        // Draw carried items FIRST (behind wizard)
+        // Draw non-chicken carried items FIRST (behind wizard)
         this.carrySlots.forEach((slot, index) => {
-            if (slot === 'chicken') {
-                this.drawCarriedChicken(ctx, index, this.carryData[index].color);
-            } else if (slot === 'basket') {
+            if (slot === 'basket') {
                 this.drawCarriedBasket(ctx, index);
             } else if (slot === 'hammer') {
                 this.drawCarriedHammer(ctx, index);
             } else if (slot === 'food') {
                 this.drawCarriedFoodBasket(ctx, index);
             }
+            // Note: chickens are now drawn ON TOP of wizard body
         });
         
         // Draw feeding animation
@@ -373,50 +386,147 @@ class Hero {
         ctx.arc(10, 0, 4, 0, Math.PI * 2);
         ctx.fill();
         
+        // Draw carried chickens ON TOP of wizard body (enhanced 1.5x size, in hands)
+        this.drawCarriedChickensEnhanced(ctx);
+        
         ctx.restore();
     }
     
-    // Draw a chicken being carried
-    drawCarriedChicken(ctx, index, color) {
-        const offsetX = index === 0 ? -18 : 18;
-        const offsetY = -30;
+    // Draw carried chickens ON TOP of wizard (1.5x scale, in hands)
+    drawCarriedChickensEnhanced(ctx) {
+        const visualScale = 1.5; // 1.5x larger visual size
+        const chickenCount = this.getChickenCount();
+        
+        if (chickenCount === 0) return;
+        
+        if (chickenCount === 1) {
+            // Single chicken - held in right hand
+            this.drawSingleCarriedChickenEnhanced(ctx, visualScale);
+        } else if (chickenCount === 2) {
+            // Two chickens - one in each hand
+            this.drawDualCarriedChickensEnhanced(ctx, visualScale);
+        }
+    }
+    
+    drawSingleCarriedChickenEnhanced(ctx, scale) {
+        // Find which slot has the chicken
+        const slotIndex = this.carrySlots.indexOf('chicken');
+        if (slotIndex === -1) return;
+        
+        const bobY = this.carryBobOffset[slotIndex] || 0;
+        const color = this.carryData[slotIndex].color || '#fff';
+        
+        // Position in right hand area
+        const offsetX = 18; // Right hand position
+        const offsetY = -5 + bobY;
         
         ctx.save();
-        ctx.translate(offsetX, offsetY);
-        ctx.scale(0.5, 0.5);
+        ctx.translate(this.x + offsetX, this.y + offsetY);
+        ctx.scale(scale, scale);
         
-        // Body
-        ctx.fillStyle = color || '#fff';
+        // Draw chicken sprite centered at origin
+        this.drawChickenSprite(ctx, color);
+        
+        ctx.restore();
+    }
+    
+    drawDualCarriedChickensEnhanced(ctx, scale) {
+        // Find which slots have chickens
+        const chickenIndices = [];
+        this.carrySlots.forEach((slot, index) => {
+            if (slot === 'chicken') chickenIndices.push(index);
+        });
+        
+        if (chickenIndices.length < 2) return;
+        
+        // Left hand chicken
+        const leftIndex = chickenIndices[0];
+        const leftBobY = this.carryBobOffset[leftIndex] || 0;
+        const leftColor = this.carryData[leftIndex].color || '#fff';
+        
+        ctx.save();
+        ctx.translate(this.x - 20, this.y - 5 + leftBobY);
+        ctx.scale(scale, scale);
+        this.drawChickenSprite(ctx, leftColor);
+        ctx.restore();
+        
+        // Right hand chicken
+        const rightIndex = chickenIndices[1];
+        const rightBobY = this.carryBobOffset[rightIndex] || 0;
+        const rightColor = this.carryData[rightIndex].color || '#fff';
+        
+        ctx.save();
+        ctx.translate(this.x + 20, this.y - 5 + rightBobY);
+        ctx.scale(scale, scale);
+        this.drawChickenSprite(ctx, rightColor);
+        ctx.restore();
+    }
+    
+    drawChickenSprite(ctx, color) {
+        // Draw chicken centered at (0, 0) with scale applied (1.5x size)
+        
+        // Shadow (scaled with chicken)
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 12, 10, 4, 0, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Body (white, larger - 15x12 at 1.5x scale = ~45px visual)
+        ctx.fillStyle = color || '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Body outline
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Wing
+        ctx.fillStyle = color === '#fff' ? '#f5f5f5' : color;
+        ctx.beginPath();
+        ctx.ellipse(-5, 2, 10, 6, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.stroke();
         
         // Head
+        ctx.fillStyle = color || '#ffffff';
         ctx.beginPath();
-        ctx.arc(8, -8, 7, 0, Math.PI * 2);
+        ctx.arc(8, -8, 10, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.stroke();
         
         // Beak
         ctx.fillStyle = '#ffa500';
         ctx.beginPath();
-        ctx.moveTo(14, -8);
-        ctx.lineTo(18, -6);
-        ctx.lineTo(14, -4);
+        ctx.moveTo(16, -8);
+        ctx.lineTo(24, -5);
+        ctx.lineTo(16, -2);
+        ctx.closePath();
         ctx.fill();
         
         // Eye
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = '#000000';
         ctx.beginPath();
-        ctx.arc(10, -10, 1.5, 0, Math.PI * 2);
+        ctx.arc(12, -10, 3, 0, Math.PI * 2);
         ctx.fill();
         
-        // Comb
-        ctx.fillStyle = '#e74c3c';
+        // Eye highlight
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(8, -14, 3, Math.PI, 0);
+        ctx.arc(13, -11, 1, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.restore();
+        // Comb (red on head)
+        ctx.fillStyle = '#e53935';
+        ctx.beginPath();
+        ctx.arc(6, -16, 4, 0, Math.PI, false);
+        ctx.fill();
     }
     
     // Draw basket being carried
