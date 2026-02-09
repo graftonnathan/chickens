@@ -209,6 +209,104 @@ class MagicRune {
     }
 }
 
+/**
+ * PawPrint - Trail left by raccoon
+ */
+class PawPrint {
+    constructor(x, y, vx, vy) {
+        this.x = x;
+        this.y = y;
+        // Rotate based on movement direction
+        this.rotation = Math.atan2(vy, vx) + Math.PI / 2;
+        this.life = 1.0;
+        this.decay = 0.008;
+        this.size = 6;
+    }
+
+    update() {
+        this.life -= this.decay;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = this.life * 0.5;
+        ctx.fillStyle = '#3d3d3d';
+
+        // Main pad
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 3, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Toe beans
+        for (let i = 0; i < 4; i++) {
+            const tx = -4.5 + i * 3;
+            ctx.beginPath();
+            ctx.arc(tx, -3, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+}
+
+/**
+ * StarBurst - Burst of stars when raccoon is intercepted
+ */
+class StarBurst {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 4 + Math.random() * 4;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.life = 1.0;
+        this.decay = 0.03;
+        this.size = 8 + Math.random() * 6;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+        this.hue = Math.random() * 60 + 30; // Gold/yellow range
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        this.life -= this.decay;
+        this.rotation += this.rotationSpeed;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = `hsl(${this.hue}, 100%, 60%)`;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+
+        // Draw 5-point star
+        const outer = this.size;
+        const inner = this.size * 0.4;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+            const radius = i % 2 === 0 ? outer : inner;
+            const angle = (i * Math.PI / 5) - Math.PI / 2;
+            const px = Math.cos(angle) * radius;
+            const py = Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
 class ParticleSystem {
     constructor() {
         this.particles = [];
@@ -219,11 +317,11 @@ class ParticleSystem {
             this.particles.push(new Particle(x, y, type));
         }
     }
-    
+
     spawnWizardSparkle(x, y) {
         this.particles.push(new WizardSparkle(x, y));
     }
-    
+
     spawnMagicBurst(x, y) {
         // Spawn multiple burst particles
         for (let i = 0; i < 12; i++) {
@@ -232,6 +330,16 @@ class ParticleSystem {
         // Spawn runes
         for (let i = 0; i < 3; i++) {
             this.particles.push(new MagicRune(x, y));
+        }
+    }
+
+    spawnPawPrint(x, y, vx, vy) {
+        this.particles.push(new PawPrint(x, y, vx, vy));
+    }
+
+    spawnStarBurst(x, y) {
+        for (let i = 0; i < 15; i++) {
+            this.particles.push(new StarBurst(x, y));
         }
     }
 
