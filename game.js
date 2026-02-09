@@ -16,9 +16,9 @@ class Game {
         this.gameTime = 0;
         this.highScore = this.loadHighScore();
         
-        // Entities
-        this.hero = new Hero(400, 450);
-        this.coop = new Coop(400, 300);
+        // Entities - positioned for backyard setting
+        this.hero = new Hero(400, 480); // Start at bottom of yard
+        this.coop = new Coop(720, 520); // Garden shed in bottom right corner
         this.spawner = new Spawner(this.coop);
         this.chickens = [];
         
@@ -46,7 +46,7 @@ class Game {
         this.lives = 3;
         this.gameTime = 0;
         this.chickens = [];
-        this.hero = new Hero(400, 450);
+        this.hero = new Hero(400, 480); // Bottom of backyard
         this.spawner.reset();
         this.particles = new ParticleSystem();
         
@@ -94,9 +94,9 @@ class Game {
                 return false; // Remove caught chicken
             }
             
-            // Check if escaped
+            // Check if escaped (backyard boundaries with fences)
             if (Collision.outsideBounds(chicken.getBounds(), {
-                left: 20, right: 780, top: 20, bottom: 580
+                left: 25, right: 775, top: 180, bottom: 575
             })) {
                 this.lives--;
                 this.particles.spawn(chicken.x, chicken.y, 'escape', 10);

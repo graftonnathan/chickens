@@ -1,66 +1,107 @@
-/**
- * Coop class - Central spawn point
+/"""
+ * Coop class - Now a Garden Shed in the backyard
  */
 class Coop {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 80;
-        this.height = 60;
+        this.width = 70;
+        this.height = 55;
     }
 
     draw(ctx) {
         ctx.save();
         
-        // Main barn body
-        ctx.fillStyle = '#c0392b';
+        // Garden shed body (light green/gray)
+        ctx.fillStyle = '#90A4AE';
         ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
         
-        // Roof
-        ctx.fillStyle = '#2c3e50';
+        // Shed roof (dark gray shingles)
+        ctx.fillStyle = '#546E7A';
         ctx.beginPath();
-        ctx.moveTo(this.x - this.width/2 - 10, this.y - this.height/2);
-        ctx.lineTo(this.x, this.y - this.height/2 - 30);
-        ctx.lineTo(this.x + this.width/2 + 10, this.y - this.height/2);
+        ctx.moveTo(this.x - this.width/2 - 5, this.y - this.height/2);
+        ctx.lineTo(this.x, this.y - this.height/2 - 25);
+        ctx.lineTo(this.x + this.width/2 + 5, this.y - this.height/2);
         ctx.closePath();
         ctx.fill();
         
-        // Door
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(this.x - 15, this.y - 10, 30, 30);
-        
-        // Door frame
-        ctx.strokeStyle = '#5c2e0b';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(this.x - 15, this.y - 10, 30, 30);
-        
-        // X pattern on door
-        ctx.beginPath();
-        ctx.moveTo(this.x - 12, this.y - 7);
-        ctx.lineTo(this.x + 12, this.y + 17);
-        ctx.moveTo(this.x + 12, this.y - 7);
-        ctx.lineTo(this.x - 12, this.y + 17);
+        // Roof overhang detail
+        ctx.strokeStyle = '#455A64';
+        ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Hay decoration
-        ctx.fillStyle = '#f1c40f';
+        // Shed door (wooden)
+        ctx.fillStyle = '#8D6E63';
+        ctx.fillRect(this.x - 12, this.y - 5, 24, 30);
+        
+        // Door frame
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - 12, this.y - 5, 24, 30);
+        
+        // Door handle
+        ctx.fillStyle = '#FFD54F';
+        ctx.beginPath();
+        ctx.arc(this.x - 6, this.y + 10, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Window on side
+        ctx.fillStyle = '#B3E5FC';
+        ctx.fillRect(this.x + 18, this.y - 15, 12, 12);
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x + 18, this.y - 15, 12, 12);
+        // Window cross
+        ctx.beginPath();
+        ctx.moveTo(this.x + 24, this.y - 15);
+        ctx.lineTo(this.x + 24, this.y - 3);
+        ctx.moveTo(this.x + 18, this.y - 9);
+        ctx.lineTo(this.x + 30, this.y - 9);
+        ctx.stroke();
+        
+        // Garden tools leaning against shed
+        // Shovel
+        ctx.strokeStyle = '#8D6E63';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(this.x - 25, this.y + 20);
+        ctx.lineTo(this.x - 30, this.y - 10);
+        ctx.stroke();
+        // Shovel head
+        ctx.fillStyle = '#B0BEC5';
+        ctx.beginPath();
+        ctx.ellipse(this.x - 30, this.y - 12, 4, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Flower bed in front of shed
+        ctx.fillStyle = '#5D4037';
+        ctx.fillRect(this.x - 35, this.y + 25, 70, 8);
+        
+        // Flowers
+        const flowerColors = ['#E91E63', '#9C27B0', '#FF5722', '#FFC107'];
         for (let i = 0; i < 5; i++) {
-            const hx = this.x + 25 + i * 8;
-            const hy = this.y + 15 + Math.sin(i) * 5;
+            ctx.fillStyle = flowerColors[i % flowerColors.length];
             ctx.beginPath();
-            ctx.arc(hx, hy, 3, 0, Math.PI * 2);
+            ctx.arc(this.x - 28 + i * 14, this.y + 22, 4, 0, Math.PI * 2);
             ctx.fill();
+            // Green stem
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(this.x - 28 + i * 14, this.y + 25);
+            ctx.lineTo(this.x - 28 + i * 14, this.y + 29);
+            ctx.stroke();
         }
         
         ctx.restore();
     }
 
     getSpawnPosition() {
-        // Random position near the door
+        // Random position near the shed door
         const offset = 20;
         return {
             x: this.x + (Math.random() - 0.5) * offset,
-            y: this.y + (Math.random() - 0.5) * offset
+            y: this.y + 15 + (Math.random() - 0.5) * offset
         };
     }
 }
