@@ -247,6 +247,118 @@ class Hero {
         return this.depositChickens();
     }
 
+    // ==================== UNIFIED TOOL SYSTEM ====================
+
+    // Pick up a tool (egg basket, hammer, or food basket)
+    pickUpTool(tool) {
+        const slotIndex = this.getAvailableSlot();
+        if (slotIndex === -1) return false;
+
+        // Check if already carrying this tool type
+        if (this.hasTool(tool.type)) return false;
+
+        // Assign tool to slot
+        this.carrySlots[slotIndex] = 'tool';
+        this.carryData[slotIndex] = { toolType: tool.type, toolRef: tool };
+        tool.pickup();
+
+        // Transfer tool uses to hero's tracking
+        switch(tool.type) {
+            case 'eggBasket':
+                this.eggsInBasket = tool.usesRemaining;
+                break;
+            case 'foodBasket':
+                this.foodCount = tool.usesRemaining;
+                break;
+        }
+
+        return true;
+    }
+
+    // Check if hero has a specific tool
+    hasTool(toolType) {
+        for (let i = 0; i < this.carrySlots.length; i++) {
+            if (this.carrySlots[i] === 'tool' && this.carryData[i].toolType === toolType) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Get tool reference by type
+    getTool(toolType) {
+        for (let i = 0; i < this.carrySlots.length; i++) {
+            if (this.carrySlots[i] === 'tool' && this.carryData[i].toolType === toolType) {
+                return this.carryData[i].toolRef;
+            }
+        }
+        return null;
+    }
+
+    // Use a tool (decrement uses)
+    useTool(toolType) {
+        const tool = this.getTool(toolType);
+        if (!tool) return false;
+
+        const success = tool.use();
+        if (success) {
+            // Update hero's tracking
+            switch(toolType) {
+                case 'eggBasket':
+                    this.eggsInBasket = tool.usesRemaining;
+                    break;
+                case 'foodBasket':
+                    this.foodCount = tool.usesRemaining;
+                    break;
+            }
+
+            // If tool is empty, drop it
+            if (tool.isEmpty()) {
+                this.dropTool(toolType);
+            }
+        }
+        return success;
+    }
+
+    // Drop a specific tool
+    dropTool(toolType) {
+        for (let i = 0; i < this.carrySlots.length; i++) {
+            if (this.carrySlots[i] === 'tool' && this.carryData[i].toolType === toolType) {
+                const tool = this.carryData[i].toolRef;
+                tool.drop();
+                this.carrySlots[i] = null;
+                this.carryData[i] = {};
+
+                // Clear tracking
+                if (toolType === 'eggBasket') this.eggsInBasket = 0;
+                if (toolType === 'foodBasket') this.foodCount = 0;
+
+                return tool;
+            }
+        }
+        return null;
+    }
+
+    // Get tool count for UI
+    getToolCount() {
+        return this.carrySlots.filter(slot => slot === 'tool').length;
+    }
+
+    // Update tool uses from tool reference (called when tool is used externally)
+    syncToolUses(toolType) {
+        const tool = this.getTool(toolType);
+        if (tool) {
+            switch(toolType) {
+                case 'eggBasket':
+                    this.eggsInBasket = tool.usesRemaining;
+                    break;
+                case 'foodBasket':
+                    this.foodCount = tool.usesRemaining;
+                    break;
+            }
+        }
+    }
+
     updateGlow(chickens) {
         if (!chickens || chickens.length === 0) {
             this.glowIntensity = 0;

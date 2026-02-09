@@ -29,16 +29,11 @@ class Game {
         this.raccoonSpawner = new RaccoonSpawner(this.coop);
         this.raccoons = [];
         
-        // Egg collection mechanic
-        this.basketItem = new BasketItem();
-        this.houseDepositZone = new HouseDepositZone();
+        // Unified tool system (replaces individual items)
+        this.toolManager = new ToolManager();
         
         // Fence destruction and repair mechanic
         this.fenceHoleManager = new FenceHoleManager();
-        this.hammerItem = new HammerItem();
-        
-        // Food basket mechanic
-        this.foodBasketItem = new FoodBasketItem();
         
         // Bonus text animations
         this.bonusTexts = [];
@@ -98,12 +93,11 @@ class Game {
         this.basketItem.respawn();
         this.coop.eggManager.reset();
         
-        // Reset fence holes and hammer
+        // Reset fence holes
         this.fenceHoleManager.reset();
-        this.hammerItem.respawn();
         
-        // Reset food basket
-        this.foodBasketItem.respawn();
+        // Reset unified tool system
+        this.toolManager.reset();
         
         this.updateUI();
         this.hideOverlays();
@@ -161,52 +155,29 @@ class Game {
             }
         }
         
-        // Update hammer item
-        this.hammerItem.update(deltaTime);
-        
-        // Hammer pickup at house
-        if (this.hammerItem.checkPickup(this.hero)) {
-            if (this.hero.pickUpHammer()) {
-                this.hammerItem.collect();
-                this.addBonusText(this.hero.x, this.hero.y - 30, '+HAMMER');
+        // Update unified tool system
+        this.toolManager.update(deltaTime);
+
+        // Tool pickup at house
+        const availableTools = this.toolManager.checkPickups(this.hero);
+        for (const tool of availableTools) {
+            if (this.hero.pickUpTool(tool)) {
+                const toolName = tool.type === 'eggBasket' ? 'BASKET' : 
+                                tool.type === 'hammer' ? 'HAMMER' : 'FOOD';
+                this.addBonusText(this.hero.x, this.hero.y - 30, `+${toolName}`);
+                break; // Only pick up one at a time
             }
         }
-        
-        // Update food basket item
-        this.foodBasketItem.update(deltaTime);
-        
-        // Food basket pickup at house
-        if (this.foodBasketItem.checkPickup(this.hero)) {
-            if (this.hero.pickUpFoodBasket()) {
-                this.foodBasketItem.collect();
-                this.addBonusText(this.hero.x, this.hero.y - 30, '+FOOD');
-            }
-        }
-        
-        // Auto-refill food at house when near house with empty/low food basket
-        if (this.hero.hasFoodBasket() && this.hero.foodCount < this.hero.maxFood) {
-            const distToHouse = Math.sqrt(
-                Math.pow(this.hero.x - 400, 2) + 
-                Math.pow(this.hero.y - 550, 2)
-            );
-            if (distToHouse < 60) {
-                const oldCount = this.hero.foodCount;
-                this.hero.foodCount = this.hero.maxFood;
-                if (this.hero.foodCount > oldCount) {
-                    this.addBonusText(this.hero.x, this.hero.y - 40, 'REFILL!');
-                }
-            }
-        }
-        
-        // Auto-feed chickens on contact
-        if (this.hero.canFeed()) {
+
+        // Auto-feed chickens on contact (using unified tool system)
+        if (this.hero.hasTool('foodBasket')) {
             // Find nearest hungry chicken
             let nearestChicken = null;
             let nearestDist = 30; // Feed range
-            
+
             this.chickens.forEach(chicken => {
                 const dist = Math.sqrt(
-                    Math.pow(chicken.x - this.hero.x, 2) + 
+                    Math.pow(chicken.x - this.hero.x, 2) +
                     Math.pow(chicken.y - this.hero.y, 2)
                 );
                 if (dist < nearestDist && chicken.hunger < 100 && !chicken.isBeingFed) {
@@ -214,9 +185,10 @@ class Game {
                     nearestChicken = chicken;
                 }
             });
-            
+
             if (nearestChicken) {
-                if (this.hero.feedChicken(nearestChicken)) {
+                if (this.hero.useTool('foodBasket')) {
+                    nearestChicken.feed();
                     this.score += 5; // +5 points for feeding
                     this.addBonusText(this.hero.x, this.hero.y - 30, '+5 FED');
                 }
@@ -267,19 +239,21 @@ class Game {
         // Check for deposit at coop (through gap) - chickens only
         this.checkDeposit();
         
-        // Egg delivery at house
-        if (this.hero.hasBasket() && this.hero.eggsInBasket > 0) {
-            if (this.houseDepositZone.isInZone(this.hero)) {
-                const eggs = this.hero.depositEggs();
-                const points = eggs * 5; // 5 points per egg
-                this.score += points;
-                this.addBonusText(this.hero.x, this.hero.y - 30, `+${points} PTS`);
-                
-                // Basket respawns for next run
-                this.basketItem.respawn();
-                
-                // Drop basket from hero (free up slot)
-                this.hero.dropBasket();
+        // Egg delivery at house (using unified tool system)
+        if (this.hero.hasTool('eggBasket')) {
+            const tool = this.hero.getTool('eggBasket');
+            if (tool.usesRemaining > 0) {
+                // Check if in house delivery zone (simplified - near house y=550)
+                const distToHouse = Math.abs(this.hero.y - 550);
+                if (distToHouse < 50 && this.hero.x > 300 && this.hero.x < 500) {
+                    const eggs = tool.usesRemaining;
+                    const points = eggs * 5; // 5 points per egg
+                    this.score += points;
+                    this.addBonusText(this.hero.x, this.hero.y - 30, `+${points} PTS`);
+
+                    // Use all eggs and drop basket
+                    this.hero.useTool('eggBasket');
+                }
             }
         }
         
@@ -446,15 +420,9 @@ class Game {
             this.drawSpawnWarning();
         }
         
-        // Draw basket at house (if not collected)
-        this.basketItem.draw(this.ctx);
-        
-        // Draw hammer at house (if not collected)
-        this.hammerItem.draw(this.ctx);
-        
-        // Draw food basket at house (if not collected)
-        this.foodBasketItem.draw(this.ctx);
-        
+        // Draw unified tools at house
+        this.toolManager.draw(this.ctx);
+
         // Draw fence holes
         this.fenceHoleManager.draw(this.ctx);
         
@@ -541,29 +509,37 @@ class Game {
         document.getElementById('lives').textContent = this.lives;
         document.getElementById('time').textContent = this.formatTime(this.gameTime);
         
-        // Update bag indicator - show shared slots (chickens, basket, or hammer)
+        // Update bag indicator - show unified carry slots
         const bagDisplay = document.getElementById('bagDisplay');
         if (bagDisplay) {
             let slotText = '';
             for (let i = 0; i < 2; i++) {
                 if (this.hero.carrySlots[i] === 'chicken') {
                     slotText += '🐔';
-                } else if (this.hero.carrySlots[i] === 'basket') {
-                    slotText += '🧺';
-                } else if (this.hero.carrySlots[i] === 'hammer') {
-                    slotText += '🔨';
+                } else if (this.hero.carrySlots[i] === 'tool') {
+                    const toolType = this.hero.carryData[i].toolType;
+                    if (toolType === 'eggBasket') slotText += '🧺';
+                    else if (toolType === 'hammer') slotText += '🔨';
+                    else if (toolType === 'foodBasket') slotText += '🌾';
                 } else {
                     slotText += '○';
                 }
             }
-            // Add egg counter if carrying basket
-            if (this.hero.hasBasket()) {
-                slotText += ` 🥚${this.hero.eggsInBasket}/${this.hero.maxEggs}`;
+
+            // Add uses counters for tools
+            if (this.hero.hasTool('eggBasket')) {
+                const tool = this.hero.getTool('eggBasket');
+                slotText += ` 🥚${tool.usesRemaining}/${tool.maxUses}`;
             }
-            // Add food counter if carrying food basket
-            if (this.hero.hasFoodBasket()) {
-                slotText += ` 🌾${this.hero.foodCount}/${this.hero.maxFood}`;
+            if (this.hero.hasTool('foodBasket')) {
+                const tool = this.hero.getTool('foodBasket');
+                slotText += ` 🌾${tool.usesRemaining}/${tool.maxUses}`;
             }
+            if (this.hero.hasTool('hammer')) {
+                const tool = this.hero.getTool('hammer');
+                slotText += ` 🔨${tool.usesRemaining}/${tool.maxUses}`;
+            }
+
             bagDisplay.textContent = slotText;
         }
         

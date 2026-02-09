@@ -1,0 +1,10 @@
+{
+  "codeExists": true,
+  "noDepositErrors": true,
+  "gameRuns": true,
+  "screenshots": [
+    "deposit-fix-game.png",
+    "deposit-fix-final.png"
+  ],
+  "overall": "PASS"
+}

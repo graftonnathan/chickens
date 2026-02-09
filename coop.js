@@ -8,11 +8,12 @@ class Coop {
         this.width = 70;
         this.height = 55;
         
-        // Fence barrier properties
+        // Fence barrier properties - fence on SOUTH, gap on NORTH
         this.fenceRadius = 50;      // Distance from center to fence
         this.fenceHeight = 30;      // Visual height of fence posts
-        this.gapStart = Math.PI * 0.75;  // 135 degrees (southwest)
-        this.gapEnd = Math.PI * 1.25;    // 225 degrees (southeast)
+        this.gapStart = Math.PI * 1.25;  // 225 degrees (SW) - gap start
+        this.gapEnd = Math.PI * 1.75;    // 315 degrees (SE) - gap end
+        // Gap is on NORTH side (facing house)
         
         // Egg manager for spawning eggs inside coop
         this.eggManager = new EggManager(this);
