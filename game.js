@@ -74,8 +74,8 @@ class Game {
         
         this.gameTime += deltaTime;
         
-        // Update hero
-        this.hero.update(deltaTime, this.input);
+        // Update hero (pass chickens for proximity glow and particles for trail)
+        this.hero.update(deltaTime, this.input, this.chickens, this.particles);
         
         // Update spawner
         if (this.spawner.update(deltaTime, this.chickens)) {
@@ -89,7 +89,7 @@ class Game {
             // Check if caught
             if (Collision.circleCircle(this.hero.getBounds(), chicken.getBounds())) {
                 this.score += 10;
-                this.particles.spawn(chicken.x, chicken.y, 'catch', 15);
+                this.particles.spawnMagicBurst(chicken.x, chicken.y);
                 this.updateUI();
                 return false; // Remove caught chicken
             }
