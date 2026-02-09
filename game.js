@@ -324,6 +324,9 @@ class Game {
                 this.score += deposited * 20; // 20 points per deposited chicken
                 this.addBonusText(this.hero.x, this.hero.y - 30, `+${deposited * 20}`);
                 
+                // Trigger deposit animation
+                this.hero.triggerDeposit();
+                
                 // Deposit particles
                 for (let i = 0; i < deposited; i++) {
                     this.particles.spawnMagicBurst(this.coop.x + (Math.random() - 0.5) * 40, this.coop.y + 20);
@@ -342,6 +345,8 @@ class Game {
                 if (this.hero.tryPickup(chicken)) {
                     // Pickup particles
                     this.particles.spawn(chicken.x, chicken.y, 'catch', 8);
+                    // Trigger pickup animation
+                    this.hero.triggerPickup();
                     return false; // Remove picked up chicken
                 }
             }
@@ -398,6 +403,9 @@ class Game {
                 const stolen = this.hero.deposit(); // Actually steals carried chickens
                 this.lives--;
                 this.particles.spawn(raccoon.x, raccoon.y, 'escape', 15);
+                
+                // Trigger startled animation on hero
+                this.hero.triggerStartled();
                 
                 if (stolen > 0) {
                     this.addBonusText(raccoon.x, raccoon.y, `-${stolen} STOLEN!`);

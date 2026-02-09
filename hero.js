@@ -42,6 +42,18 @@ class Hero {
         // Carry animation for chickens
         this.carryAnimationTime = 0;
         this.carryBobOffset = [0, 0]; // Per-chicken bob offsets
+        
+        // Whimsical animation system
+        this.animator = new WizardAnimator();
+        this.facingDirection = 'right'; // 'left' or 'right'
+        this.isMoving = false;
+        this.lastVelocityX = 0;
+        this.isStartled = false;
+        this.startledTimer = 0;
+        this.isDepositing = false;
+        this.depositTimer = 0;
+        this.isPickingUp = false;
+        this.pickupTimer = 0;
     }
 
     update(deltaTime, input, chickens, particleSystem) {
@@ -63,6 +75,41 @@ class Hero {
         if (move.dx !== 0 || move.dy !== 0) {
             this.facing = Math.atan2(move.dy, move.dx);
         }
+        
+        // Track facing direction for animation
+        if (this.vx > 0.1) {
+            this.facingDirection = 'right';
+        } else if (this.vx < -0.1) {
+            this.facingDirection = 'left';
+        }
+        
+        // Track if moving
+        this.isMoving = Math.abs(this.vx) > 1 || Math.abs(this.vy) > 1;
+        this.lastVelocityX = this.vx;
+        
+        // Update animation timers
+        if (this.startledTimer > 0) {
+            this.startledTimer -= deltaTime;
+            if (this.startledTimer <= 0) {
+                this.isStartled = false;
+            }
+        }
+        if (this.depositTimer > 0) {
+            this.depositTimer -= deltaTime;
+            if (this.depositTimer <= 0) {
+                this.isDepositing = false;
+            }
+        }
+        if (this.pickupTimer > 0) {
+            this.pickupTimer -= deltaTime;
+            if (this.pickupTimer <= 0) {
+                this.isPickingUp = false;
+            }
+        }
+        
+        // Update animator
+        const animState = this.determineAnimationState();
+        this.animator.update(deltaTime, animState);
         
         // Keep in bounds (within fences: x=40-760, y=80-500)
         this.x = Math.max(40 + this.radius, Math.min(760 - this.radius, this.x));
@@ -221,18 +268,113 @@ class Hero {
         }
     }
 
+    determineAnimationState() {
+        // Priority order for animation states
+        if (this.isStartled) return 'startled';
+        if (this.isFeeding) return 'pickup';
+        if (this.isDepositing) return 'deposit';
+        if (this.isPickingUp) return 'pickup';
+        if (this.getChickenCount() > 0) return 'carry';
+        if (this.isMoving) return 'walk';
+        return 'idle';
+    }
+    
+    triggerStartled() {
+        this.isStartled = true;
+        this.startledTimer = 0.2; // 200ms
+    }
+    
+    triggerDeposit() {
+        this.isDepositing = true;
+        this.depositTimer = 0.75; // 750ms
+    }
+    
+    triggerPickup() {
+        this.isPickingUp = true;
+        this.pickupTimer = 0.9; // 900ms
+    }
+    
     draw(ctx) {
+        // Get current pose from animator
+        const pose = this.animator.getCurrentPose();
+        
         ctx.save();
-        ctx.translate(this.x, this.y);
         
-        // Bob animation
-        const bob = Math.sin(this.time * 3) * 2;
+        // Apply facing direction (flip horizontally if facing left)
+        if (this.facingDirection === 'left') {
+            ctx.translate(this.x * 2, 0);
+            ctx.scale(-1, 1);
+        }
         
-        // Shadow
+        // Draw shadow
         ctx.fillStyle = 'rgba(0,0,0,0.3)';
         ctx.beginPath();
-        ctx.ellipse(0, 20, 18, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x, this.y + 20, 18, 6, 0, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Draw wizard with pose
+        this.drawWizardWithPose(ctx, this.x, this.y, pose);
+        
+        ctx.restore();
+        
+        // Draw carried items on top (not affected by facing flip)
+        if (this.getChickenCount() > 0) {
+            this.drawCarriedChickensEnhanced(ctx);
+        }
+        
+        // Draw other carried items (basket, hammer, food)
+        this.carrySlots.forEach((slot, index) => {
+            if (slot === 'basket') {
+                this.drawCarriedBasket(ctx, index);
+            } else if (slot === 'hammer') {
+                this.drawCarriedHammer(ctx, index);
+            } else if (slot === 'food') {
+                this.drawCarriedFoodBasket(ctx, index);
+            }
+        });
+        
+        // Draw feeding animation
+        if (this.isFeeding) {
+            this.drawFeedingAnimation(ctx);
+        }
+    }
+    
+    drawWizardWithPose(ctx, x, y, pose) {
+        const centerX = x;
+        const centerY = y - 20; // Body center
+        
+        // Apply body transformations
+        ctx.save();
+        ctx.translate(centerX, centerY + pose.bodyY);
+        ctx.rotate(pose.bodyRotation);
+        ctx.scale(1, pose.bodyScaleY);
+        
+        // Draw legs
+        this.drawLegWithPose(ctx, pose.legL, 'left');
+        this.drawLegWithPose(ctx, pose.legR, 'right');
+        
+        // Draw robe (body)
+        this.drawRobeWithPose(ctx, pose.robeFlare);
+        
+        // Draw beard (with sway)
+        this.drawBeardWithPose(ctx, pose.beardSway);
+        
+        // Draw head
+        this.drawHeadWithPose(ctx);
+        
+        // Draw hat (with rotation and bounce)
+        ctx.save();
+        ctx.translate(0, pose.hatY - 25);
+        ctx.rotate(pose.hatRotation);
+        this.drawHatWithPose(ctx);
+        ctx.restore();
+        
+        // Draw arms
+        this.drawArmWithPose(ctx, pose.armL, 'left');
+        this.drawArmWithPose(ctx, pose.armR, 'right');
+        
+        // Draw staff
+        this.drawStaffWithPose(ctx, pose.staffAngle);
         
         // Proximity glow (magic hands) - only when can carry more
         if (this.glowIntensity > 0 && this.getAvailableSlots() > 0) {
@@ -246,148 +388,145 @@ class Hero {
             ctx.fill();
         }
         
-        // Draw non-chicken carried items FIRST (behind wizard)
-        this.carrySlots.forEach((slot, index) => {
-            if (slot === 'basket') {
-                this.drawCarriedBasket(ctx, index);
-            } else if (slot === 'hammer') {
-                this.drawCarriedHammer(ctx, index);
-            } else if (slot === 'food') {
-                this.drawCarriedFoodBasket(ctx, index);
-            }
-            // Note: chickens are now drawn ON TOP of wizard body
-        });
-        
-        // Draw feeding animation
-        if (this.isFeeding) {
-            this.drawFeedingAnimation(ctx);
-        }
-        
-        // Staff (drawn behind body)
-        const staffBob = Math.sin(this.time * 2 + 1) * 3;
-        ctx.save();
-        ctx.translate(12, -10 + staffBob);
-        ctx.rotate(0.1);
-        
-        // Staff wood
-        ctx.strokeStyle = '#8b4513';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(0, 25);
-        ctx.lineTo(0, -35);
-        ctx.stroke();
-        
-        // Staff crystal
-        const pulse = 0.7 + Math.sin(this.time * 4) * 0.3;
-        ctx.fillStyle = `rgba(0, 255, 255, ${pulse})`;
-        ctx.beginPath();
-        ctx.moveTo(0, -35);
-        ctx.lineTo(-6, -45);
-        ctx.lineTo(0, -55);
-        ctx.lineTo(6, -45);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Crystal glow
-        ctx.fillStyle = `rgba(0, 255, 255, ${0.3 * pulse})`;
-        ctx.beginPath();
-        ctx.arc(0, -45, 12, 0, Math.PI * 2);
-        ctx.fill();
-        
         ctx.restore();
-        
+    }
+    
+    drawRobeWithPose(ctx, flare) {
         // Robe body (indigo with gold trim)
-        ctx.fillStyle = '#4b0082'; // Indigo
+        ctx.fillStyle = '#4b0082';
         ctx.beginPath();
-        ctx.moveTo(-15, 15);
-        ctx.lineTo(-12, -15);
-        ctx.lineTo(12, -15);
-        ctx.lineTo(15, 15);
+        ctx.moveTo(-15, 0);
+        ctx.lineTo(15, 0);
+        ctx.lineTo(20 + flare, 30);
+        ctx.lineTo(-20 - flare, 30);
         ctx.closePath();
         ctx.fill();
         
-        // Gold trim on robe
+        // Gold trim
         ctx.strokeStyle = '#ffd700';
         ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-15, 15);
-        ctx.lineTo(-12, -15);
-        ctx.lineTo(12, -15);
-        ctx.lineTo(15, 15);
         ctx.stroke();
         
         // Belt
         ctx.fillStyle = '#8b4513';
-        ctx.fillRect(-12, -5, 24, 4);
-        ctx.fillStyle = '#ffd700'; // Gold buckle
-        ctx.fillRect(-3, -6, 6, 6);
+        ctx.fillRect(-12, 10, 24, 4);
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(-3, 9, 6, 6);
+    }
+    
+    drawLegWithPose(ctx, leg, side) {
+        ctx.save();
+        ctx.translate(leg.x, leg.y + 30);
+        ctx.rotate(leg.angle);
         
-        // Beard (flowing white)
-        const beardSway = Math.sin(this.time * 2) * 2;
-        ctx.fillStyle = '#f0f0f0';
+        // Boot
+        ctx.fillStyle = '#2d1b4e';
+        ctx.fillRect(-4, 0, 8, 15);
+        
+        ctx.restore();
+    }
+    
+    drawArmWithPose(ctx, arm, side) {
+        ctx.save();
+        ctx.translate(arm.x, arm.y);
+        ctx.rotate(arm.angle);
+        
+        // Sleeve
+        ctx.fillStyle = '#4b0082';
         ctx.beginPath();
-        ctx.moveTo(-8, -12);
-        ctx.quadraticCurveTo(-10 + beardSway, 0, -6, 10);
-        ctx.lineTo(6, 10);
-        ctx.quadraticCurveTo(10 + beardSway, 0, 8, -12);
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(6, 0);
+        ctx.lineTo(4, 20);
+        ctx.lineTo(-4, 20);
         ctx.closePath();
         ctx.fill();
         
+        // Hand
+        ctx.fillStyle = '#ffdbac';
+        ctx.beginPath();
+        ctx.arc(0, 22, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
+    
+    drawHeadWithPose(ctx) {
         // Face
         ctx.fillStyle = '#ffdbac';
         ctx.beginPath();
-        ctx.arc(0, -18, 10, 0, Math.PI * 2);
+        ctx.arc(0, -15, 10, 0, Math.PI * 2);
         ctx.fill();
         
         // Eyes
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(-4, -18, 3, 3);
+        ctx.fillRect(1, -18, 3, 3);
+    }
+    
+    drawBeardWithPose(ctx, sway) {
+        ctx.save();
+        ctx.translate(0, -10);
+        ctx.rotate(sway);
+        
+        ctx.fillStyle = '#f0f0f0';
         ctx.beginPath();
-        ctx.arc(-3, -20, 2, 0, Math.PI * 2);
-        ctx.arc(3, -20, 2, 0, Math.PI * 2);
+        ctx.moveTo(-6, 0);
+        ctx.quadraticCurveTo(0, 15, 6, 0);
+        ctx.quadraticCurveTo(0, 10, -6, 0);
         ctx.fill();
         
-        // Hat (pointed with star)
-        const hatBounce = Math.sin(this.time * 4) * 1.5;
-        ctx.save();
-        ctx.translate(0, -25 + bob + hatBounce);
+        ctx.restore();
+    }
+    
+    drawHatWithPose(ctx) {
+        // Hat base
+        ctx.fillStyle = '#2d1b4e';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 18, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
         
         // Hat cone
-        ctx.fillStyle = '#4b0082'; // Indigo
         ctx.beginPath();
-        ctx.moveTo(-18, 5);
-        ctx.lineTo(0, -40);
-        ctx.lineTo(18, 5);
+        ctx.moveTo(-12, 0);
+        ctx.quadraticCurveTo(-5, -25, 0, -35);
+        ctx.quadraticCurveTo(5, -25, 12, 0);
         ctx.closePath();
         ctx.fill();
         
-        // Gold trim on hat
-        ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
         // Hat band
         ctx.fillStyle = '#ffd700';
-        ctx.fillRect(-12, -5, 24, 4);
+        ctx.fillRect(-12, -2, 24, 4);
         
-        // Star on hat
+        // Star
         ctx.fillStyle = '#ffd700';
         this.drawStar(ctx, 0, -25, 6, 5, 2);
+    }
+    
+    drawStaffWithPose(ctx, angle) {
+        ctx.save();
+        ctx.translate(12, -5);
+        ctx.rotate(angle);
         
-        ctx.restore();
-        
-        // Hands (glowing when near chickens and can carry)
-        if (this.glowIntensity > 0 && this.getAvailableSlots() > 0) {
-            ctx.fillStyle = `rgba(0, 255, 255, ${0.6 + this.glowIntensity * 0.4})`;
-        } else {
-            ctx.fillStyle = '#ffdbac';
-        }
+        // Staff shaft
+        ctx.strokeStyle = '#8b4513';
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(-10, 0, 4, 0, Math.PI * 2);
-        ctx.arc(10, 0, 4, 0, Math.PI * 2);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -35);
+        ctx.stroke();
+        
+        // Crystal
+        const pulse = 0.7 + Math.sin(this.time * 4) * 0.3;
+        ctx.fillStyle = `rgba(0, 255, 255, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, -38, 5, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw carried chickens ON TOP of wizard body (enhanced 1.5x size, in hands)
-        this.drawCarriedChickensEnhanced(ctx);
+        // Glow
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, -38, 8, 0, Math.PI * 2);
+        ctx.fill();
         
         ctx.restore();
     }
