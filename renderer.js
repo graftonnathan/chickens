@@ -324,10 +324,10 @@ class Renderer {
         // Hat (pointed red)
         this.ctx.fillStyle = '#DC143C';
         this.ctx.beginPath();
-        ctx.moveTo(x - 10, y - 18);
-        ctx.lineTo(x, y - 35);
-        ctx.lineTo(x + 10, y - 18);
-        ctx.closePath();
+        this.ctx.moveTo(x - 10, y - 18);
+        this.ctx.lineTo(x, y - 35);
+        this.ctx.lineTo(x + 10, y - 18);
+        this.ctx.closePath();
         this.ctx.fill();
         
         // Beard
