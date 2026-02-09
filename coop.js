@@ -1,4 +1,4 @@
-/"""
+/**
  * Coop class - Now a Garden Shed in the backyard
  */
 class Coop {
