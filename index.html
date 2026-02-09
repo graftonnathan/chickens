@@ -29,7 +29,7 @@
         
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         
-        <div class="controls-hint">WASD to Move • Carry 2 max • Deposit at Coop</div>
+        <div class="controls-hint">WASD to Move • Carry 2 (chickens/basket) • Deposit chickens at Coop • Eggs at House</div>
     </div>
 
     <!-- Start Screen -->
@@ -39,8 +39,9 @@
             <p class="tagline">Carry chickens to the coop before they escape!</p>
             <div class="instructions">
                 <p>🎮 Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move</p>
-                <p>🐔 Pick up chickens (max <strong>2</strong> in your bag)</p>
-                <p>🏠 Carry them to the <strong>coop</strong> at the north fence</p>
+                <p>🐔 Pick up chickens (max <strong>2</strong> slots: chickens OR basket)</p>
+                <p>🏠 Carry chickens to the <strong>coop</strong> at north fence (20 pts)</p>
+                <p>🧺 Pick up <strong>basket</strong> at house, enter coop, collect eggs (5 pts each)</p>
                 <p>🦝 Stop <strong>raccoons</strong> from reaching the coop</p>
                 <p>🎯 Deposit <strong>50 chickens</strong> to win!</p>
                 <p>❤️ Don't let chickens reach the house or raccoons steal!</p>
@@ -63,6 +64,8 @@
     <script src="input.js"></script>
     <script src="collision.js"></script>
     <script src="particle.js"></script>
+    <script src="egg.js"></script>
+    <script src="basket.js"></script>
     <script src="chicken.js"></script>
     <script src="coop.js"></script>
     <script src="raccoon.js"></script>

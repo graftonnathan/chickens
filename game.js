@@ -29,6 +29,10 @@ class Game {
         this.raccoonSpawner = new RaccoonSpawner(this.coop);
         this.raccoons = [];
         
+        // Egg collection mechanic
+        this.basketItem = new BasketItem();
+        this.houseDepositZone = new HouseDepositZone();
+        
         // Bonus text animations
         this.bonusTexts = [];
         
@@ -83,6 +87,10 @@ class Game {
         this.raccoonSpawner.reset();
         this.particles = new ParticleSystem();
         
+        // Reset egg collection
+        this.basketItem.respawn();
+        this.coop.eggManager.reset();
+        
         this.updateUI();
         this.hideOverlays();
     }
@@ -128,15 +136,53 @@ class Game {
         // Update hero
         this.hero.update(deltaTime, this.input, this.chickens, this.particles);
         
-        // Fence collision - prevent hero from entering coop enclosure (except through gap)
-        const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius);
+        // Update basket item (glow animation)
+        this.basketItem.update(deltaTime);
+        
+        // Basket pickup at house
+        if (this.basketItem.checkPickup(this.hero)) {
+            if (this.hero.pickUpBasket()) {
+                this.basketItem.collect();
+                this.addBonusText(this.hero.x, this.hero.y - 30, '+BASKET');
+            }
+        }
+        
+        // Fence collision - prevent hero from entering coop enclosure (except with basket through gap)
+        const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
         if (!fenceResult.inGap) {
             this.hero.x = fenceResult.x;
             this.hero.y = fenceResult.y;
         }
         
-        // Check for deposit at coop (through gap)
+        // Egg collection when inside coop with basket
+        if (fenceResult.inCoop) {
+            const collectedEggs = this.coop.checkEggCollection(this.hero);
+            if (collectedEggs.length > 0) {
+                this.addBonusText(this.hero.x, this.hero.y - 30, `+${collectedEggs.length} EGG${collectedEggs.length > 1 ? 'S' : ''}`);
+            }
+        }
+        
+        // Check for deposit at coop (through gap) - chickens only
         this.checkDeposit();
+        
+        // Egg delivery at house
+        if (this.hero.hasBasket() && this.hero.eggsInBasket > 0) {
+            if (this.houseDepositZone.isInZone(this.hero)) {
+                const eggs = this.hero.depositEggs();
+                const points = eggs * 5; // 5 points per egg
+                this.score += points;
+                this.addBonusText(this.hero.x, this.hero.y - 30, `+${points} PTS`);
+                
+                // Basket respawns for next run
+                this.basketItem.respawn();
+                
+                // Drop basket from hero (free up slot)
+                this.hero.dropBasket();
+            }
+        }
+        
+        // Update coop (egg spawning)
+        this.coop.update(deltaTime);
         
         // Update spawner
         if (this.spawner.update(deltaTime, this.chickens)) {
@@ -170,7 +216,7 @@ class Game {
     checkDeposit() {
         // If hero is in deposit zone (at fence gap) and carrying chickens
         if (this.coop.isAtDepositZone(this.hero)) {
-            const deposited = this.hero.deposit();
+            const deposited = this.hero.depositChickens();
             if (deposited > 0) {
                 this.depositedCount += deposited;
                 this.score += deposited * 20; // 20 points per deposited chicken
@@ -284,6 +330,9 @@ class Game {
             this.drawSpawnWarning();
         }
         
+        // Draw basket at house (if not collected)
+        this.basketItem.draw(this.ctx);
+        
         // Draw coop at NORTH
         this.coop.draw(this.ctx);
         
@@ -302,6 +351,11 @@ class Game {
         // Draw deposit hint when at gap with chickens
         if (this.state === 'playing') {
             this.coop.drawDepositHint(this.ctx, this.hero);
+        }
+        
+        // Draw house delivery hint when carrying eggs
+        if (this.state === 'playing') {
+            this.houseDepositZone.drawHint(this.ctx, this.hero);
         }
         
         // Draw other particles
@@ -362,11 +416,24 @@ class Game {
         document.getElementById('lives').textContent = this.lives;
         document.getElementById('time').textContent = this.formatTime(this.gameTime);
         
-        // Update bag indicator
+        // Update bag indicator - show shared slots (chickens or basket)
         const bagDisplay = document.getElementById('bagDisplay');
         if (bagDisplay) {
-            const count = this.hero.getCarryCount();
-            bagDisplay.textContent = '🐔'.repeat(count) + '○'.repeat(2 - count);
+            let slotText = '';
+            for (let i = 0; i < 2; i++) {
+                if (this.hero.carrySlots[i] === 'chicken') {
+                    slotText += '🐔';
+                } else if (this.hero.carrySlots[i] === 'basket') {
+                    slotText += '🧺';
+                } else {
+                    slotText += '○';
+                }
+            }
+            // Add egg counter if carrying basket
+            if (this.hero.hasBasket()) {
+                slotText += ` 🥚${this.hero.eggsInBasket}/${this.hero.maxEggs}`;
+            }
+            bagDisplay.textContent = slotText;
         }
     }
 

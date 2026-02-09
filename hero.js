@@ -1,5 +1,5 @@
 /**
- * Hero class - The Wizard with Carrying Mechanic!
+ * Hero class - The Wizard with shared 2-slot carry system (chickens OR basket)
  */
 class Hero {
     constructor(x, y) {
@@ -19,19 +19,23 @@ class Hero {
         // Proximity glow
         this.glowIntensity = 0;
         
-        // Carrying mechanic
-        this.carrying = []; // Array of carried chickens (max 2)
-        this.maxCarry = 2;
-        this.carrySpeedPenalty = 0.20; // 20% slower when carrying
+        // Shared carry slots (2 total)
+        this.carrySlots = [null, null]; // Each can be: 'chicken', 'basket'
+        this.carryData = [{}, {}]; // Additional data for each slot
+        
+        // Basket-specific data
+        this.eggsInBasket = 0;
+        this.maxEggs = 5;
     }
 
     update(deltaTime, input, chickens, particleSystem) {
         const move = input.getMovementVector();
         
         // Calculate speed based on carry load
-        const carryCount = this.carrying.length;
-        const speedMultiplier = 1 - (carryCount * this.carrySpeedPenalty);
-        this.speed = this.baseSpeed * speedMultiplier;
+        const items = this.carrySlots.filter(s => s !== null).length;
+        const hasBasket = this.carrySlots.includes('basket');
+        const speedPenalty = items * 20 + (hasBasket ? 10 : 0); // -20 per item, -10 for basket weight
+        this.speed = this.baseSpeed - speedPenalty;
         
         this.vx = move.dx * this.speed;
         this.vy = move.dy * this.speed;
@@ -61,39 +65,108 @@ class Hero {
         }
         
         // Calculate proximity glow (only when not carrying max)
-        if (carryCount < this.maxCarry) {
+        if (items < 2) {
             this.updateGlow(chickens);
         } else {
             this.glowIntensity = 0;
         }
     }
     
+    // Get available slot count
+    getAvailableSlots() {
+        return this.carrySlots.filter(slot => slot === null).length;
+    }
+    
+    // Check if can pick up item
+    canPickUp(itemType) {
+        return this.getAvailableSlots() >= 1;
+    }
+    
+    // Check if carrying basket
+    hasBasket() {
+        return this.carrySlots.includes('basket');
+    }
+    
+    // Get basket slot index (or -1 if not carrying)
+    getBasketSlot() {
+        return this.carrySlots.indexOf('basket');
+    }
+    
+    // Get chicken count
+    getChickenCount() {
+        return this.carrySlots.filter(s => s === 'chicken').length;
+    }
+    
+    // Get total carry count for UI
+    getCarryCount() {
+        return this.carrySlots.filter(s => s !== null).length;
+    }
+    
     // Try to pick up a chicken
     tryPickup(chicken) {
-        if (this.carrying.length < this.maxCarry) {
-            this.carrying.push({
-                color: ['#fff', '#ffeb3b', '#ff9800'][Math.floor(Math.random() * 3)]
-            });
+        if (this.canPickUp('chicken')) {
+            const slotIndex = this.carrySlots.indexOf(null);
+            this.carrySlots[slotIndex] = 'chicken';
+            this.carryData[slotIndex] = {
+                color: chicken.color || '#fff'
+            };
             return true;
         }
         return false;
     }
     
-    // Deposit all carried chickens
-    deposit() {
-        const count = this.carrying.length;
-        this.carrying = [];
-        return count;
+    // Pick up basket
+    pickUpBasket() {
+        if (this.canPickUp('basket')) {
+            const slotIndex = this.carrySlots.indexOf(null);
+            this.carrySlots[slotIndex] = 'basket';
+            this.carryData[slotIndex] = {};
+            this.eggsInBasket = 0;
+            return true;
+        }
+        return false;
     }
     
-    // Check if can carry more
-    canCarry() {
-        return this.carrying.length < this.maxCarry;
+    // Drop basket (frees slot, loses eggs)
+    dropBasket() {
+        const slotIndex = this.getBasketSlot();
+        if (slotIndex !== -1) {
+            this.carrySlots[slotIndex] = null;
+            this.carryData[slotIndex] = {};
+            const lostEggs = this.eggsInBasket;
+            this.eggsInBasket = 0;
+            return lostEggs;
+        }
+        return 0;
     }
     
-    // Get carry count for HUD
-    getCarryCount() {
-        return this.carrying.length;
+    // Collect egg into basket
+    collectEgg() {
+        if (this.hasBasket() && this.eggsInBasket < this.maxEggs) {
+            this.eggsInBasket++;
+            return true;
+        }
+        return false;
+    }
+    
+    // Deposit chickens at coop (returns count)
+    depositChickens() {
+        let deposited = 0;
+        for (let i = 0; i < this.carrySlots.length; i++) {
+            if (this.carrySlots[i] === 'chicken') {
+                this.carrySlots[i] = null;
+                this.carryData[i] = {};
+                deposited++;
+            }
+        }
+        return deposited;
+    }
+    
+    // Deposit eggs at house (returns count)
+    depositEggs() {
+        const eggs = this.eggsInBasket;
+        this.eggsInBasket = 0;
+        return eggs;
     }
     
     updateGlow(chickens) {
@@ -136,7 +209,7 @@ class Hero {
         ctx.fill();
         
         // Proximity glow (magic hands) - only when can carry more
-        if (this.glowIntensity > 0 && this.canCarry()) {
+        if (this.glowIntensity > 0 && this.getAvailableSlots() > 0) {
             const glowRadius = 30 + Math.sin(this.time * 8) * 5;
             const gradient = ctx.createRadialGradient(0, 0, 5, 0, 0, glowRadius);
             gradient.addColorStop(0, `rgba(0, 255, 255, ${0.4 * this.glowIntensity})`);
@@ -147,9 +220,13 @@ class Hero {
             ctx.fill();
         }
         
-        // Draw carried chickens FIRST (behind wizard)
-        this.carrying.forEach((chicken, index) => {
-            this.drawCarriedChicken(ctx, index, chicken.color);
+        // Draw carried items FIRST (behind wizard)
+        this.carrySlots.forEach((slot, index) => {
+            if (slot === 'chicken') {
+                this.drawCarriedChicken(ctx, index, this.carryData[index].color);
+            } else if (slot === 'basket') {
+                this.drawCarriedBasket(ctx, index);
+            }
         });
         
         // Staff (drawn behind body)
@@ -265,7 +342,7 @@ class Hero {
         ctx.restore();
         
         // Hands (glowing when near chickens and can carry)
-        if (this.glowIntensity > 0 && this.canCarry()) {
+        if (this.glowIntensity > 0 && this.getAvailableSlots() > 0) {
             ctx.fillStyle = `rgba(0, 255, 255, ${0.6 + this.glowIntensity * 0.4})`;
         } else {
             ctx.fillStyle = '#ffdbac';
@@ -317,6 +394,49 @@ class Hero {
         ctx.beginPath();
         ctx.arc(8, -14, 3, Math.PI, 0);
         ctx.fill();
+        
+        ctx.restore();
+    }
+    
+    // Draw basket being carried
+    drawCarriedBasket(ctx, index) {
+        const offsetX = index === 0 ? -18 : 18;
+        const offsetY = -25;
+        
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(0.6, 0.6);
+        
+        // Basket body (brown wicker)
+        ctx.fillStyle = '#8b4513';
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI, false);
+        ctx.fill();
+        
+        // Basket weave texture
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 1;
+        for (let i = -8; i <= 8; i += 4) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, 8);
+            ctx.stroke();
+        }
+        
+        // Handle
+        ctx.strokeStyle = '#8b4513';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, -5, 10, Math.PI, 0, false);
+        ctx.stroke();
+        
+        // Egg count indicator on basket
+        if (this.eggsInBasket > 0) {
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.eggsInBasket.toString(), 0, 5);
+        }
         
         ctx.restore();
     }

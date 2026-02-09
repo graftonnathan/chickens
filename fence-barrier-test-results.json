@@ -1,0 +1,9 @@
+{
+  "gapMarkers": false,
+  "screenshots": [
+    "fence-initial.png",
+    "fence-hero-near-coop.png",
+    "fence-final.png"
+  ],
+  "overall": "FAIL"
+}

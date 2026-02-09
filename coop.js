@@ -13,6 +13,14 @@ class Coop {
         this.fenceHeight = 30;      // Visual height of fence posts
         this.gapStart = Math.PI * 0.75;  // 135 degrees (southwest)
         this.gapEnd = Math.PI * 1.25;    // 225 degrees (southeast)
+        
+        // Egg manager for spawning eggs inside coop
+        this.eggManager = new EggManager(this);
+    }
+    
+    update(deltaTime) {
+        // Update egg spawning
+        this.eggManager.update(deltaTime);
     }
 
     draw(ctx) {
@@ -104,6 +112,9 @@ class Coop {
         
         // Draw gap markers on top
         this.drawGapMarkers(ctx);
+        
+        // Draw eggs (inside fence, behind hero but visible)
+        this.eggManager.draw(ctx);
         
         ctx.restore();
     }
@@ -237,29 +248,56 @@ class Coop {
     }
     
     // Push position outside fence (for collision response)
-    pushOutside(x, y, radius) {
+    // hero parameter needed to check if has basket for entry
+    pushOutside(x, y, radius, hero) {
         const dx = x - this.x;
         const dy = y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        
+        // If hero has basket and is at/in gap, allow entry
+        const hasBasket = hero && hero.hasBasket && hero.hasBasket();
+        const inGap = this.isAngleInGap(angle);
         
         if (dist < this.fenceRadius - radius) {
-            const angle = Math.atan2(dy, dx);
-            
-            // Check if in gap
-            if (this.isAngleInGap(angle)) {
-                return { x, y, inGap: true };  // Allow in gap
+            // If has basket and in gap, allow through (enter coop)
+            if (hasBasket && inGap) {
+                return { x, y, inGap: true, inCoop: true };
             }
             
-            // Push to fence edge
+            // If in gap but no basket, still at gap (for deposit)
+            if (inGap) {
+                return { x, y, inGap: true, inCoop: false };
+            }
+            
+            // Otherwise push to fence edge
             const targetDist = this.fenceRadius - radius;
             return {
                 x: this.x + (dx / dist) * targetDist,
                 y: this.y + (dy / dist) * targetDist,
-                inGap: false
+                inGap: false,
+                inCoop: false
             };
         }
         
-        return { x, y, inGap: false };
+        // Check if outside but near fence in gap
+        return { x, y, inGap: inGap && dist < this.fenceRadius + radius, inCoop: false };
+    }
+    
+    // Check egg collection when hero is inside coop
+    checkEggCollection(hero) {
+        // Only collect if hero has basket and is inside coop
+        if (!hero.hasBasket || !hero.hasBasket()) return [];
+        
+        const dx = hero.x - this.x;
+        const dy = hero.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        // Only collect if inside fence
+        if (dist < this.fenceRadius) {
+            return this.eggManager.checkCollection(hero);
+        }
+        return [];
     }
     
     // Check if hero is at deposit zone (touching fence in gap)
