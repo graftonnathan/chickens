@@ -37,6 +37,9 @@ class Game {
         this.fenceHoleManager = new FenceHoleManager();
         this.hammerItem = new HammerItem();
         
+        // Food basket mechanic
+        this.foodBasketItem = new FoodBasketItem();
+        
         // Bonus text animations
         this.bonusTexts = [];
         
@@ -98,6 +101,9 @@ class Game {
         // Reset fence holes and hammer
         this.fenceHoleManager.reset();
         this.hammerItem.respawn();
+        
+        // Reset food basket
+        this.foodBasketItem.respawn();
         
         this.updateUI();
         this.hideOverlays();
@@ -165,6 +171,60 @@ class Game {
                 this.addBonusText(this.hero.x, this.hero.y - 30, '+HAMMER');
             }
         }
+        
+        // Update food basket item
+        this.foodBasketItem.update(deltaTime);
+        
+        // Food basket pickup at house
+        if (this.foodBasketItem.checkPickup(this.hero)) {
+            if (this.hero.pickUpFoodBasket()) {
+                this.foodBasketItem.collect();
+                this.addBonusText(this.hero.x, this.hero.y - 30, '+FOOD');
+            }
+        }
+        
+        // Auto-refill food at house when near house with empty/low food basket
+        if (this.hero.hasFoodBasket() && this.hero.foodCount < this.hero.maxFood) {
+            const distToHouse = Math.sqrt(
+                Math.pow(this.hero.x - 400, 2) + 
+                Math.pow(this.hero.y - 550, 2)
+            );
+            if (distToHouse < 60) {
+                const oldCount = this.hero.foodCount;
+                this.hero.foodCount = this.hero.maxFood;
+                if (this.hero.foodCount > oldCount) {
+                    this.addBonusText(this.hero.x, this.hero.y - 40, 'REFILL!');
+                }
+            }
+        }
+        
+        // Auto-feed chickens on contact
+        if (this.hero.canFeed()) {
+            // Find nearest hungry chicken
+            let nearestChicken = null;
+            let nearestDist = 30; // Feed range
+            
+            this.chickens.forEach(chicken => {
+                const dist = Math.sqrt(
+                    Math.pow(chicken.x - this.hero.x, 2) + 
+                    Math.pow(chicken.y - this.hero.y, 2)
+                );
+                if (dist < nearestDist && chicken.hunger < 100 && !chicken.isBeingFed) {
+                    nearestDist = dist;
+                    nearestChicken = chicken;
+                }
+            });
+            
+            if (nearestChicken) {
+                if (this.hero.feedChicken(nearestChicken)) {
+                    this.score += 5; // +5 points for feeding
+                    this.addBonusText(this.hero.x, this.hero.y - 30, '+5 FED');
+                }
+            }
+        }
+        
+        // Update feeding animation
+        this.hero.updateFeeding(deltaTime);
         
         // Check for auto-repair when near hole with hammer
         if (this.hero.hasHammer() && !this.hero.isRepairing) {
@@ -384,6 +444,9 @@ class Game {
         // Draw hammer at house (if not collected)
         this.hammerItem.draw(this.ctx);
         
+        // Draw food basket at house (if not collected)
+        this.foodBasketItem.draw(this.ctx);
+        
         // Draw fence holes
         this.fenceHoleManager.draw(this.ctx);
         
@@ -488,6 +551,10 @@ class Game {
             // Add egg counter if carrying basket
             if (this.hero.hasBasket()) {
                 slotText += ` 🥚${this.hero.eggsInBasket}/${this.hero.maxEggs}`;
+            }
+            // Add food counter if carrying food basket
+            if (this.hero.hasFoodBasket()) {
+                slotText += ` 🌾${this.hero.foodCount}/${this.hero.maxFood}`;
             }
             bagDisplay.textContent = slotText;
         }

@@ -32,6 +32,12 @@ class Hero {
         this.repairTimer = 0;
         this.repairDuration = 2.0; // 2 seconds to repair
         this.repairTarget = null;
+        
+        // Food basket state
+        this.foodCount = 0;
+        this.maxFood = 5;
+        this.isFeeding = false;
+        this.feedingTimer = 0;
     }
 
     update(deltaTime, input, chickens, particleSystem) {
@@ -234,8 +240,15 @@ class Hero {
                 this.drawCarriedBasket(ctx, index);
             } else if (slot === 'hammer') {
                 this.drawCarriedHammer(ctx, index);
+            } else if (slot === 'food') {
+                this.drawCarriedFoodBasket(ctx, index);
             }
         });
+        
+        // Draw feeding animation
+        if (this.isFeeding) {
+            this.drawFeedingAnimation(ctx);
+        }
         
         // Staff (drawn behind body)
         const staffBob = Math.sin(this.time * 2 + 1) * 3;
@@ -572,5 +585,129 @@ class Hero {
         ctx.fill();
         
         ctx.restore();
+    }
+    
+    // Food basket methods
+    hasFoodBasket() {
+        return this.carrySlots.includes('food');
+    }
+    
+    pickUpFoodBasket() {
+        if (this.canPickUp('food')) {
+            const slotIndex = this.carrySlots.indexOf(null);
+            this.carrySlots[slotIndex] = 'food';
+            this.carryData[slotIndex] = {};
+            this.foodCount = this.maxFood;
+            return true;
+        }
+        return false;
+    }
+    
+    dropFoodBasket() {
+        const slotIndex = this.carrySlots.indexOf('food');
+        if (slotIndex !== -1) {
+            this.carrySlots[slotIndex] = null;
+            this.carryData[slotIndex] = {};
+            this.foodCount = 0;
+            this.isFeeding = false;
+            this.feedingTimer = 0;
+            return true;
+        }
+        return false;
+    }
+    
+    canFeed() {
+        return this.hasFoodBasket() && this.foodCount > 0 && !this.isFeeding;
+    }
+    
+    feedChicken(chicken) {
+        if (this.canFeed() && chicken.canBeFed(this)) {
+            this.isFeeding = true;
+            this.feedingTimer = 1.0; // 1 second feeding animation
+            this.foodCount--;
+            
+            chicken.feed();
+            
+            return true;
+        }
+        return false;
+    }
+    
+    updateFeeding(deltaTime) {
+        if (this.isFeeding) {
+            this.feedingTimer -= deltaTime;
+            if (this.feedingTimer <= 0) {
+                this.isFeeding = false;
+                this.feedingTimer = 0;
+            }
+        }
+    }
+    
+    // Draw food basket being carried
+    drawCarriedFoodBasket(ctx, index) {
+        const offsetX = index === 0 ? -18 : 18;
+        const offsetY = -25;
+        
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(0.6, 0.6);
+        
+        // Basket body (orange-brown)
+        ctx.fillStyle = '#d2691e';
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI, false);
+        ctx.fill();
+        
+        // Weave texture
+        ctx.strokeStyle = '#8b4513';
+        ctx.lineWidth = 1;
+        for (let i = -8; i <= 8; i += 4) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, 8);
+            ctx.stroke();
+        }
+        
+        // Feed/grain inside
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(-3, -3, 2, 0, Math.PI * 2);
+        ctx.arc(2, -5, 1.5, 0, Math.PI * 2);
+        ctx.arc(4, -2, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Handle
+        ctx.strokeStyle = '#d2691e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, -5, 10, Math.PI, 0, false);
+        ctx.stroke();
+        
+        // Food count indicator on basket
+        if (this.foodCount > 0) {
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.foodCount.toString(), 0, 5);
+        }
+        
+        ctx.restore();
+    }
+    
+    // Draw feeding animation
+    drawFeedingAnimation(ctx) {
+        const progress = 1 - (this.feedingTimer / 1.0);
+        
+        // Feed particles scattering
+        for (let i = 0; i < 5; i++) {
+            const angle = i * 1.2 + progress * 3;
+            const px = this.x + Math.cos(angle) * 20 * progress;
+            const py = this.y + Math.sin(angle) * 5 - progress * 10;
+            
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 }
