@@ -33,9 +33,89 @@ class Chicken {
         
         // For carrying
         this.color = ['#fff', '#ffeb3b', '#ff9800'][Math.floor(Math.random() * 3)];
+        
+        // Hole targeting
+        this.targetHole = null;
+        this.usingHole = false;
     }
 
-    update(deltaTime) {
+    update(deltaTime, fenceHoleManager) {
+        // Check for holes - 50% chance to use if closer than south
+        if (fenceHoleManager && !this.usingHole) {
+            const nearestHole = fenceHoleManager.getNearestHole(this.x, this.y);
+            if (nearestHole) {
+                const distToHole = Math.sqrt(
+                    Math.pow(nearestHole.x - this.x, 2) + 
+                    Math.pow(nearestHole.y - this.y, 2)
+                );
+                const distToSouth = 500 - this.y; // Distance to house roof escape
+                
+                // 50% chance to use hole if closer
+                if (distToHole < distToSouth && Math.random() < 0.5) {
+                    this.targetHole = nearestHole;
+                    this.usingHole = true;
+                }
+            }
+        }
+        
+        // If using hole, move toward it
+        if (this.usingHole && this.targetHole) {
+            const dx = this.targetHole.x - this.x;
+            const dy = this.targetHole.y - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < 5) {
+                // Reached hole - will escape
+                return 'escaped_through_hole';
+            }
+            
+            // Move toward hole (simple hop toward target)
+            this.moveTowardHole(deltaTime, dx, dy, dist);
+        } else {
+            // Normal south movement
+            this.moveSouth(deltaTime);
+        }
+        
+        // Check if reached south (house roof)
+        if (this.y > 500) {
+            return 'escaped_south';
+        }
+        
+        return null;
+    }
+    
+    moveTowardHole(deltaTime, dx, dy, dist) {
+        // Update hop cycle
+        this.hopTimer += deltaTime;
+        
+        if (this.hopState === 'hop') {
+            const hopProgress = Math.min(this.hopTimer / this.hopDuration, 1);
+            this.bounceY = -12 * Math.sin(hopProgress * Math.PI);
+            this.wingAngle = Math.sin(hopProgress * Math.PI * 4) * 0.4;
+            
+            if (this.hopTimer >= this.hopDuration) {
+                // Move toward hole
+                const moveSpeed = this.hopDistance;
+                this.x += (dx / dist) * moveSpeed;
+                this.y += (dy / dist) * moveSpeed;
+                
+                this.hopState = 'pause';
+                this.hopTimer = 0;
+                this.bounceY = 0;
+                this.wingAngle = 0;
+            }
+        } else {
+            this.bounceY = Math.sin(Date.now() / 100) * 0.5;
+            this.wingAngle = 0;
+            
+            if (this.hopTimer >= this.pauseDuration) {
+                this.hopState = 'hop';
+                this.hopTimer = 0;
+            }
+        }
+    }
+    
+    moveSouth(deltaTime) {
         // Update weave (continuous sine wave for X)
         this.weaveTime += deltaTime;
         const weaveOffset = Math.sin(

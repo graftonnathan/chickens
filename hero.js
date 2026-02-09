@@ -20,12 +20,18 @@ class Hero {
         this.glowIntensity = 0;
         
         // Shared carry slots (2 total)
-        this.carrySlots = [null, null]; // Each can be: 'chicken', 'basket'
+        this.carrySlots = [null, null]; // Each can be: 'chicken', 'basket', 'hammer'
         this.carryData = [{}, {}]; // Additional data for each slot
         
         // Basket-specific data
         this.eggsInBasket = 0;
         this.maxEggs = 5;
+        
+        // Hammer repair state
+        this.isRepairing = false;
+        this.repairTimer = 0;
+        this.repairDuration = 2.0; // 2 seconds to repair
+        this.repairTarget = null;
     }
 
     update(deltaTime, input, chickens, particleSystem) {
@@ -226,6 +232,8 @@ class Hero {
                 this.drawCarriedChicken(ctx, index, this.carryData[index].color);
             } else if (slot === 'basket') {
                 this.drawCarriedBasket(ctx, index);
+            } else if (slot === 'hammer') {
+                this.drawCarriedHammer(ctx, index);
             }
         });
         
@@ -460,5 +468,109 @@ class Hero {
 
     getBounds() {
         return { x: this.x, y: this.y, radius: this.radius };
+    }
+    
+    // Hammer methods
+    hasHammer() {
+        return this.carrySlots.includes('hammer');
+    }
+    
+    pickUpHammer() {
+        if (this.canPickUp('hammer')) {
+            const slotIndex = this.carrySlots.indexOf(null);
+            this.carrySlots[slotIndex] = 'hammer';
+            this.carryData[slotIndex] = {};
+            return true;
+        }
+        return false;
+    }
+    
+    dropHammer() {
+        const slotIndex = this.carrySlots.indexOf('hammer');
+        if (slotIndex !== -1) {
+            this.carrySlots[slotIndex] = null;
+            this.carryData[slotIndex] = {};
+            this.cancelRepair();
+            return true;
+        }
+        return false;
+    }
+    
+    // Repair methods
+    startRepair(hole) {
+        if (this.hasHammer() && !this.isRepairing && hole) {
+            this.isRepairing = true;
+            this.repairTimer = this.repairDuration;
+            this.repairTarget = hole;
+            hole.isBeingRepaired = true;
+            return true;
+        }
+        return false;
+    }
+    
+    updateRepair(deltaTime) {
+        if (!this.isRepairing || !this.repairTarget) return null;
+        
+        // Check if still in range
+        if (!this.repairTarget.canRepair(this)) {
+            this.cancelRepair();
+            return null;
+        }
+        
+        // Update progress
+        this.repairTimer -= deltaTime;
+        this.repairTarget.repairProgress = ((this.repairDuration - this.repairTimer) / this.repairDuration) * 100;
+        
+        if (this.repairTimer <= 0) {
+            // Repair complete
+            const hole = this.repairTarget;
+            this.cancelRepair();
+            return hole;
+        }
+        
+        return null; // Still repairing
+    }
+    
+    cancelRepair() {
+        if (this.repairTarget) {
+            this.repairTarget.isBeingRepaired = false;
+            this.repairTarget.repairProgress = 0;
+        }
+        this.isRepairing = false;
+        this.repairTimer = 0;
+        this.repairTarget = null;
+    }
+    
+    // Draw hammer being carried
+    drawCarriedHammer(ctx, index) {
+        const offsetX = index === 0 ? -20 : 20;
+        const offsetY = -15;
+        
+        // Add swing animation when repairing
+        let swingAngle = 0;
+        if (this.isRepairing) {
+            const swingProgress = (this.repairDuration - this.repairTimer) / this.repairDuration;
+            swingAngle = Math.sin(swingProgress * Math.PI * 6) * 0.5; // 3 swings per second
+        }
+        
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.rotate(swingAngle);
+        ctx.scale(0.6, 0.6);
+        
+        // Handle
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(-2, -10, 4, 25);
+        
+        // Hammer head
+        ctx.fillStyle = '#9e9e9e';
+        ctx.fillRect(-10, -15, 20, 10);
+        
+        // Claw
+        ctx.beginPath();
+        ctx.arc(10, -10, 4, 0, Math.PI, false);
+        ctx.fill();
+        
+        ctx.restore();
     }
 }

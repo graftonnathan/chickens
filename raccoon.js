@@ -27,7 +27,65 @@ class Raccoon {
         // Trail timer
         this.trailTimer = 0;
         
+        // Spawn punch properties
+        this.spawnSide = null;
+        this.hasPunched = false;
+        this.punchTimer = 0;
+        this.punchDuration = 0.5; // 500ms punch animation
+        
         this.calculateDirection();
+    }
+    
+    // Static method to spawn raccoon with fence punch
+    static spawnWithPunch(coop, fenceHoleManager, particleSystem) {
+        // Choose spawn side (N/E/W)
+        const sides = ['north', 'east', 'west'];
+        const side = sides[Math.floor(Math.random() * sides.length)];
+        
+        let spawnX, spawnY;
+        switch(side) {
+            case 'north':
+                spawnX = 100 + Math.random() * 600;
+                spawnY = 40;
+                break;
+            case 'east':
+                spawnX = 760;
+                spawnY = 100 + Math.random() * 400;
+                break;
+            case 'west':
+                spawnX = 40;
+                spawnY = 100 + Math.random() * 400;
+                break;
+        }
+        
+        // Create raccoon
+        const raccoon = new Raccoon(spawnX, spawnY, coop.x, coop.y);
+        raccoon.spawnSide = side;
+        
+        // Punch fence and create hole
+        raccoon.punchFence(fenceHoleManager, particleSystem);
+        
+        return raccoon;
+    }
+    
+    punchFence(fenceHoleManager, particleSystem) {
+        // Start punch animation
+        this.hasPunched = true;
+        this.punchTimer = this.punchDuration;
+        
+        // Create hole at spawn location
+        if (fenceHoleManager) {
+            fenceHoleManager.createHole(this.x, this.y, this.spawnSide);
+        }
+        
+        // Emit wood break particles
+        if (particleSystem) {
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI * 2 * i) / 8 + Math.random() * 0.5;
+                const speed = 50 + Math.random() * 50;
+                particleSystem.spawnWoodParticle(this.x, this.y, angle, speed);
+            }
+        }
     }
 
     calculateDirection() {
@@ -43,6 +101,15 @@ class Raccoon {
 
     update(deltaTime, particleSystem) {
         this.time += deltaTime;
+        
+        // Handle punch animation
+        if (this.hasPunched && this.punchTimer > 0) {
+            this.punchTimer -= deltaTime;
+            if (this.punchTimer <= 0) {
+                this.hasPunched = false;
+            }
+            return; // Don't move during punch
+        }
         
         if (this.state === 'spawning') {
             this.spawnTimer += deltaTime;
@@ -97,6 +164,13 @@ class Raccoon {
     draw(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y);
+        
+        // Punch pose animation
+        if (this.hasPunched && this.punchTimer > 0) {
+            this.drawPunchPose(ctx);
+            ctx.restore();
+            return;
+        }
         
         // Spawning animation (scale up with dust)
         if (this.state === 'spawning') {
@@ -230,6 +304,63 @@ class Raccoon {
     getBounds() {
         return { x: this.x, y: this.y, radius: this.radius };
     }
+    
+    drawPunchPose(ctx) {
+        const punchProgress = 1 - (this.punchTimer / this.punchDuration);
+        const pawOffset = Math.sin(punchProgress * Math.PI) * 15;
+        
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, 15, 14, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Body (vertical - standing on hind legs)
+        ctx.fillStyle = '#6D5A4B';
+        ctx.fillRect(-10, -30, 20, 35);
+        
+        // Raised paw (animates)
+        ctx.fillStyle = '#6D5A4B';
+        ctx.beginPath();
+        ctx.arc(15, -20 + pawOffset, 10, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Mask (angry)
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.ellipse(0, -35, 12, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Angry eyes (red)
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(-6, -38, 4, 3);
+        ctx.fillRect(2, -38, 4, 3);
+        
+        // Slanted angry eyebrows
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-8, -42);
+        ctx.lineTo(-2, -40);
+        ctx.moveTo(2, -40);
+        ctx.lineTo(8, -42);
+        ctx.stroke();
+        
+        // Nose
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.arc(8, -32, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Punch impact effect at peak
+        if (punchProgress > 0.4 && punchProgress < 0.6) {
+            ctx.strokeStyle = '#ff5722';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(20, -10, 15 + pawOffset * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
 }
 
 /**
@@ -272,27 +403,9 @@ class RaccoonSpawner {
         return false;
     }
 
-    spawnRaccoon() {
-        // Choose random side: NORTH (0), EAST (1), or WEST (2)
-        const side = Math.floor(Math.random() * 3);
-        let spawnX, spawnY;
-        
-        switch(side) {
-            case 0: // NORTH (top edge, above fence)
-                spawnX = 100 + Math.random() * 600;
-                spawnY = 20;
-                break;
-            case 1: // EAST (right edge, outside fence)
-                spawnX = 810;
-                spawnY = 100 + Math.random() * 400;
-                break;
-            case 2: // WEST (left edge, outside fence)
-                spawnX = -10;
-                spawnY = 100 + Math.random() * 400;
-                break;
-        }
-        
-        return new Raccoon(spawnX, spawnY, this.coop.x, this.coop.y);
+    spawnRaccoon(fenceHoleManager, particleSystem) {
+        // Use spawnWithPunch to create raccoon with hole
+        return Raccoon.spawnWithPunch(this.coop, fenceHoleManager, particleSystem);
     }
 
     getWarningProgress() {

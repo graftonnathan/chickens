@@ -33,6 +33,10 @@ class Game {
         this.basketItem = new BasketItem();
         this.houseDepositZone = new HouseDepositZone();
         
+        // Fence destruction and repair mechanic
+        this.fenceHoleManager = new FenceHoleManager();
+        this.hammerItem = new HammerItem();
+        
         // Bonus text animations
         this.bonusTexts = [];
         
@@ -91,6 +95,10 @@ class Game {
         this.basketItem.respawn();
         this.coop.eggManager.reset();
         
+        // Reset fence holes and hammer
+        this.fenceHoleManager.reset();
+        this.hammerItem.respawn();
+        
         this.updateUI();
         this.hideOverlays();
     }
@@ -147,6 +155,40 @@ class Game {
             }
         }
         
+        // Update hammer item
+        this.hammerItem.update(deltaTime);
+        
+        // Hammer pickup at house
+        if (this.hammerItem.checkPickup(this.hero)) {
+            if (this.hero.pickUpHammer()) {
+                this.hammerItem.collect();
+                this.addBonusText(this.hero.x, this.hero.y - 30, '+HAMMER');
+            }
+        }
+        
+        // Check for auto-repair when near hole with hammer
+        if (this.hero.hasHammer() && !this.hero.isRepairing) {
+            const nearestHole = this.fenceHoleManager.getNearestHole(this.hero.x, this.hero.y);
+            if (nearestHole && nearestHole.canRepair(this.hero)) {
+                this.hero.startRepair(nearestHole);
+            }
+        }
+        
+        // Update repair progress
+        if (this.hero.isRepairing) {
+            const repairedHole = this.hero.updateRepair(deltaTime);
+            if (repairedHole) {
+                // Repair complete
+                this.fenceHoleManager.removeHole(repairedHole);
+                this.score += 20; // +20 points for repair
+                this.addBonusText(this.hero.x, this.hero.y - 50, '+20 REPAIR');
+                
+                // Respawn hammer for next use
+                this.hammerItem.respawn();
+                this.hero.dropHammer();
+            }
+        }
+        
         // Fence collision - prevent hero from entering coop enclosure (except with basket through gap)
         const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
         if (!fenceResult.inGap) {
@@ -189,10 +231,10 @@ class Game {
             this.chickens.push(this.spawner.spawnChicken());
         }
         
-        // Update chickens
+        // Update chickens (with fence hole awareness)
         this.updateChickens(deltaTime);
         
-        // Update raccoons
+        // Update raccoons (with fence hole creation)
         this.updateRaccoons(deltaTime);
         
         // Update bonus texts
@@ -232,10 +274,10 @@ class Game {
     
     updateChickens(deltaTime) {
         this.chickens = this.chickens.filter(chicken => {
-            chicken.update(deltaTime);
+            const result = chicken.update(deltaTime, this.fenceHoleManager);
             
             // Check if hero can pick up chicken
-            if (this.hero.canCarry() && 
+            if (this.hero.canPickUp('chicken') && 
                 Collision.circleCircle(this.hero.getBounds(), chicken.getBounds())) {
                 if (this.hero.tryPickup(chicken)) {
                     // Pickup particles
@@ -244,15 +286,21 @@ class Game {
                 }
             }
             
-            // Check if chicken reached the HOUSE ROOF (south) - ESCAPE at y > 500
-            if (chicken.y > 500) {
+            // Check escape result
+            if (result === 'escaped_through_hole') {
                 this.lives--;
                 this.particles.spawn(chicken.x, chicken.y, 'escape', 10);
-                
                 if (this.lives <= 0) {
                     this.gameOver();
                 }
-                return false; // Remove escaped chicken
+                return false;
+            } else if (result === 'escaped_south') {
+                this.lives--;
+                this.particles.spawn(chicken.x, chicken.y, 'escape', 10);
+                if (this.lives <= 0) {
+                    this.gameOver();
+                }
+                return false;
             }
             
             return true;
@@ -260,9 +308,9 @@ class Game {
     }
     
     updateRaccoons(deltaTime) {
-        // Spawn new raccoon
+        // Spawn new raccoon (with fence punch)
         if (this.raccoonSpawner.update(deltaTime, this.raccoons)) {
-            this.raccoons.push(this.raccoonSpawner.spawnRaccoon());
+            this.raccoons.push(this.raccoonSpawner.spawnRaccoon(this.fenceHoleManager, this.particles));
         }
         
         // Update existing raccoons
@@ -332,6 +380,12 @@ class Game {
         
         // Draw basket at house (if not collected)
         this.basketItem.draw(this.ctx);
+        
+        // Draw hammer at house (if not collected)
+        this.hammerItem.draw(this.ctx);
+        
+        // Draw fence holes
+        this.fenceHoleManager.draw(this.ctx);
         
         // Draw coop at NORTH
         this.coop.draw(this.ctx);
@@ -416,7 +470,7 @@ class Game {
         document.getElementById('lives').textContent = this.lives;
         document.getElementById('time').textContent = this.formatTime(this.gameTime);
         
-        // Update bag indicator - show shared slots (chickens or basket)
+        // Update bag indicator - show shared slots (chickens, basket, or hammer)
         const bagDisplay = document.getElementById('bagDisplay');
         if (bagDisplay) {
             let slotText = '';
@@ -425,6 +479,8 @@ class Game {
                     slotText += '🐔';
                 } else if (this.hero.carrySlots[i] === 'basket') {
                     slotText += '🧺';
+                } else if (this.hero.carrySlots[i] === 'hammer') {
+                    slotText += '🔨';
                 } else {
                     slotText += '○';
                 }
@@ -434,6 +490,25 @@ class Game {
                 slotText += ` 🥚${this.hero.eggsInBasket}/${this.hero.maxEggs}`;
             }
             bagDisplay.textContent = slotText;
+        }
+        
+        // Update hole warning if holes exist
+        const holeCount = this.fenceHoleManager.getHoleCount();
+        if (holeCount > 0) {
+            // Could add a hole warning element to HTML, for now just log
+            const holeWarning = document.getElementById('holeWarning');
+            if (holeWarning) {
+                holeWarning.textContent = `HOLES: ${holeCount}/6`;
+                // Color based on urgency
+                if (holeCount >= 5) {
+                    holeWarning.style.color = '#f44336'; // Red alert
+                } else if (holeCount >= 3) {
+                    holeWarning.style.color = '#ff5722'; // Orange-red
+                } else {
+                    holeWarning.style.color = '#ff9800'; // Orange
+                }
+                holeWarning.style.display = 'block';
+            }
         }
     }
 
