@@ -1,0 +1,13 @@
+{
+  "codeVerified": true,
+  "gameRuns": true,
+  "screenshots": [
+    "coop-fence-start.png",
+    "coop-fence-game.png",
+    "coop-fence-final.png"
+  ],
+  "observations": [
+    "Game running: Score=0/50, Lives=3, Time=0:02"
+  ],
+  "overall": "PASS"
+}

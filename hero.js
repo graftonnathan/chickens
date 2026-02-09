@@ -241,7 +241,12 @@ class Hero {
         this.eggsInBasket = 0;
         return eggs;
     }
-    
+
+    // Deposit all carried chickens (returns count) - used for raccoon steal
+    deposit() {
+        return this.depositChickens();
+    }
+
     updateGlow(chickens) {
         if (!chickens || chickens.length === 0) {
             this.glowIntensity = 0;

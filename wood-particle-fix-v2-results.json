@@ -1,0 +1,10 @@
+{
+  "codeExists": true,
+  "noConsoleErrors": true,
+  "gameRuns": true,
+  "screenshots": [
+    "wood-fix-v2-game.png",
+    "wood-fix-v2-final.png"
+  ],
+  "overall": "PASS"
+}
