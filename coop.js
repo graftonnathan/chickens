@@ -51,6 +51,7 @@ class Coop {
         ctx.strokeStyle = '#5D4037';
         ctx.lineWidth = 2;
         ctx.strokeRect(this.x + 18, this.y - 15, 12, 12);
+        
         // Window cross
         ctx.beginPath();
         ctx.moveTo(this.x + 24, this.y - 15);
@@ -67,6 +68,7 @@ class Coop {
         ctx.moveTo(this.x - 25, this.y + 20);
         ctx.lineTo(this.x - 30, this.y - 10);
         ctx.stroke();
+        
         // Shovel head
         ctx.fillStyle = '#B0BEC5';
         ctx.beginPath();
@@ -84,6 +86,7 @@ class Coop {
             ctx.beginPath();
             ctx.arc(this.x - 28 + i * 14, this.y + 22, 4, 0, Math.PI * 2);
             ctx.fill();
+            
             // Green stem
             ctx.strokeStyle = '#4CAF50';
             ctx.lineWidth = 2;
