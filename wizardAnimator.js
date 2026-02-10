@@ -137,6 +137,170 @@ class WizardAnimator {
     easeInOutQuad(t) {
         return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
     }
+    
+    // Draw the wizard with current pose
+    draw(ctx, state, time, facingDirection) {
+        // Update animation state
+        this.update(0.016, state); // Assume ~60fps for draw updates
+        
+        const pose = this.currentPose;
+        
+        // Save context for wizard drawing
+        ctx.save();
+        
+        // Apply facing direction
+        if (facingDirection === 'left') {
+            ctx.scale(-1, 1);
+        }
+        
+        // Draw wizard body with pose
+        this.drawBody(ctx, pose);
+        
+        ctx.restore();
+    }
+    
+    drawBody(ctx, pose) {
+        const bodyY = pose.bodyY || 0;
+        const bodyScaleY = pose.bodyScaleY || 1;
+        
+        // Body shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(0, 22, 12, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Robe body
+        ctx.fillStyle = '#2d1b4e';
+        ctx.beginPath();
+        ctx.ellipse(0, bodyY, 14, 18 * bodyScaleY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Robe flare
+        const flare = pose.robeFlare || 0;
+        ctx.fillStyle = '#3d2b5e';
+        ctx.beginPath();
+        ctx.moveTo(-12, bodyY + 10);
+        ctx.quadraticCurveTo(0, 22 + flare, 12, bodyY + 10);
+        ctx.lineTo(8, bodyY);
+        ctx.lineTo(-8, bodyY);
+        ctx.fill();
+        
+        // Head
+        ctx.fillStyle = '#ffdbac';
+        ctx.beginPath();
+        ctx.arc(0, bodyY - 15, 10, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eyes
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(-4, bodyY - 18, 3, 3);
+        ctx.fillRect(1, bodyY - 18, 3, 3);
+        
+        // Beard with sway
+        const beardSway = pose.beardSway || 0;
+        ctx.save();
+        ctx.translate(0, bodyY - 10);
+        ctx.rotate(beardSway);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.quadraticCurveTo(0, 15, 6, 0);
+        ctx.quadraticCurveTo(0, 10, -6, 0);
+        ctx.fill();
+        ctx.restore();
+        
+        // Hat
+        const hatY = (pose.hatY || 0) + bodyY - 20;
+        const hatRotation = pose.hatRotation || 0;
+        ctx.save();
+        ctx.translate(0, hatY);
+        ctx.rotate(hatRotation);
+        
+        // Hat base
+        ctx.fillStyle = '#2d1b4e';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 18, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Hat cone
+        ctx.beginPath();
+        ctx.moveTo(-12, 0);
+        ctx.quadraticCurveTo(-5, -25, 0, -35);
+        ctx.quadraticCurveTo(5, -25, 12, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Hat band
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(-12, -2, 24, 4);
+        
+        ctx.restore();
+        
+        // Staff
+        const staffAngle = pose.staffAngle || 0;
+        ctx.save();
+        ctx.translate(12, bodyY - 5);
+        ctx.rotate(staffAngle);
+        
+        // Staff shaft
+        ctx.strokeStyle = '#8b4513';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -35);
+        ctx.stroke();
+        
+        // Crystal
+        const pulse = 0.7 + Math.sin(time * 4) * 0.3;
+        ctx.fillStyle = `rgba(0, 255, 255, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(0, -38, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Glow
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, -38, 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+        
+        // Draw legs
+        this.drawLeg(ctx, pose.legL, -6, bodyY + 15);
+        this.drawLeg(ctx, pose.legR, 6, bodyY + 15);
+        
+        // Draw arms
+        this.drawArm(ctx, pose.armL, -12, bodyY - 5, true);
+        this.drawArm(ctx, pose.armR, 12, bodyY - 5, false);
+    }
+    
+    drawLeg(ctx, leg, x, y) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(leg?.angle || 0);
+        
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(-3, 0, 6, 12);
+        
+        ctx.restore();
+    }
+    
+    drawArm(ctx, arm, x, y, isLeft) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(arm?.angle || 0);
+        
+        ctx.fillStyle = '#2d1b4e';
+        ctx.fillRect(-2, 0, 4, 10);
+        
+        // Hand
+        ctx.fillStyle = '#ffdbac';
+        ctx.beginPath();
+        ctx.arc(0, 12, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
 }
 
 // Utility functions
