@@ -14,15 +14,23 @@ class Tool {
         // Tool-specific properties
         this.maxUses = this.getMaxUses();
         this.usesRemaining = this.maxUses;
+        
+        // Egg basket specific: holds collected eggs
+        this.eggs = 0;
+        this.maxEggs = this.getMaxEggs();
     }
     
     getMaxUses() {
         switch(this.type) {
-            case 'eggBasket': return 5;   // 5 eggs
+            case 'eggBasket': return 10;  // 10 egg capacity (not uses, but capacity)
             case 'hammer': return 3;      // 3 repairs
             case 'foodBasket': return 5;  // 5 feedings
             default: return 1;
         }
+    }
+    
+    getMaxEggs() {
+        return this.type === 'eggBasket' ? 10 : 0;
     }
     
     update(deltaTime) {
@@ -181,8 +189,22 @@ class Tool {
     
     reset() {
         this.usesRemaining = this.maxUses;
+        this.eggs = 0;
         this.pickedUp = false;
         this.glowPhase = 0;
+    }
+    
+    // Egg basket specific methods
+    canCollect() {
+        return this.type === 'eggBasket' && this.eggs < this.maxEggs;
+    }
+    
+    collectEgg() {
+        if (this.canCollect()) {
+            this.eggs++;
+            return true;
+        }
+        return false;
     }
     
     getBounds() {

@@ -1,416 +1,310 @@
 /**
- * Chicken class - Realistic hop/pause movement with weave animation
+ * Chicken class - Egg laying coop chicken with hunger system
  */
 class Chicken {
-    constructor(x, y) {
-        // Base position (center line for weave)
-        this.baseX = x;
+    constructor(id, x, y) {
+        this.id = id;
         this.x = x;
         this.y = y;
         this.radius = 15;
         
-        // Weave (side-to-side sine wave)
-        this.weaveAmplitude = 15; // Max pixels from center
-        this.weaveFrequency = 2 + Math.random() * 2; // Random 2-4 Hz
-        this.weavePhase = Math.random() * Math.PI * 2;
-        this.weaveTime = 0;
+        // State
+        this.inCoop = true;           // In coop or escaped/roaming
+        this.hasEgg = false;          // Has egg ready to collect
+        this.hunger = 100;            // 0-100%
         
-        // Hop cycle
-        this.hopState = 'pause'; // 'pause' | 'hop'
-        this.hopTimer = 0;
-        this.hopDuration = 0.15; // 150ms hop
-        this.pauseDuration = 0.1; // 100ms pause
-        this.hopDistance = 15; // Pixels per hop
+        // Timers
+        this.eggTimer = 0;            // Time until next egg
+        this.hungerDecayRate = 0.5;   // 0.5% per second
+        this.animTimer = 0;
         
-        // Random variation per chicken
-        this.hopDuration += (Math.random() - 0.5) * 0.05;
-        this.pauseDuration += (Math.random() - 0.5) * 0.05;
-        
-        // Visual animation offsets
-        this.bounceY = 0;
-        this.headLag = 0;
-        this.wingAngle = 0;
-        
-        // For carrying
+        // Visual
         this.color = ['#fff', '#ffeb3b', '#ff9800'][Math.floor(Math.random() * 3)];
+        this.state = 'idle';          // idle, moving, eating, laying
         
-        // Hole targeting
-        this.targetHole = null;
-        this.usingHole = false;
+        // Movement
+        this.targetX = x;
+        this.targetY = y;
+        this.moveSpeed = 30;
         
-        // Hunger system
-        this.hunger = 100; // 0-100%
-        this.hungerDecayRate = 1; // % per second
-        this.baseSpeed = 60; // Base movement speed
-        
-        // Feeding state
-        this.isBeingFed = false;
-        this.feedingTimer = 0;
-        this.starveAnimTimer = 0;
+        // Fleeing
+        this.isFleeing = false;
+        this.fleeTargetY = 600; // House direction
     }
-
-    update(deltaTime, fenceHoleManager) {
-        // Handle feeding animation
-        if (this.isBeingFed) {
-            this.feedingTimer -= deltaTime;
-            if (this.feedingTimer <= 0) {
-                this.isBeingFed = false;
-                this.feedingTimer = 0;
-            }
-            return null; // Don't move while being fed
-        }
+    
+    update(deltaTime, coop) {
+        this.animTimer += deltaTime;
         
-        // Decrease hunger over time
+        // Update hunger
         this.hunger -= this.hungerDecayRate * deltaTime;
         this.hunger = Math.max(0, this.hunger);
         
-        // Get speed multiplier based on hunger
-        const speedMultiplier = this.getSpeedMultiplier();
-        
-        // Don't move if starving
-        if (this.hunger === 0) {
-            this.starveAnimTimer += deltaTime;
-            return null;
-        }
-        
-        // Check for holes - 50% chance to use if closer than south
-        if (fenceHoleManager && !this.usingHole) {
-            const nearestHole = fenceHoleManager.getNearestHole(this.x, this.y);
-            if (nearestHole) {
-                const distToHole = Math.sqrt(
-                    Math.pow(nearestHole.x - this.x, 2) + 
-                    Math.pow(nearestHole.y - this.y, 2)
-                );
-                const distToSouth = 500 - this.y; // Distance to house roof escape
-                
-                // 50% chance to use hole if closer
-                if (distToHole < distToSouth && Math.random() < 0.5) {
-                    this.targetHole = nearestHole;
-                    this.usingHole = true;
-                }
-            }
-        }
-        
-        // If using hole, move toward it
-        if (this.usingHole && this.targetHole) {
-            const dx = this.targetHole.x - this.x;
-            const dy = this.targetHole.y - this.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            if (dist < 5) {
-                // Reached hole - will escape
-                return 'escaped_through_hole';
-            }
-            
-            // Move toward hole with hunger speed modifier
-            this.moveTowardHole(deltaTime, dx, dy, dist, speedMultiplier);
+        if (this.inCoop) {
+            this.updateInCoop(deltaTime, coop);
         } else {
-            // Normal south movement with hunger speed modifier
-            this.moveSouth(deltaTime, speedMultiplier);
-        }
-        
-        // Check if reached south (house roof)
-        if (this.y > 500) {
-            return 'escaped_south';
+            return this.updateOutOfCoop(deltaTime);
         }
         
         return null;
     }
     
-    // Get speed multiplier based on hunger
-    getSpeedMultiplier() {
-        if (this.hunger >= 50) return 1.0;      // Full speed
-        if (this.hunger >= 25) return 0.7;      // Hungry, slower
-        if (this.hunger > 0) return 0.4;        // Very hungry, very slow
-        return 0;                                // Starving, stopped
+    updateInCoop(deltaTime, coop) {
+        // Check if should leave coop (starving, overcrowded, or spooked)
+        if (this.hunger === 0 || coop.isOvercrowded() || coop.wasSpooked) {
+            this.leaveCoop();
+            return;
+        }
+        
+        // Try to lay egg
+        if (!this.hasEgg) {
+            const eggInterval = this.getEggInterval();
+            this.eggTimer += deltaTime * 1000; // Convert to ms
+            
+            if (this.eggTimer >= eggInterval) {
+                this.layEgg();
+            }
+        }
+        
+        // Idle movement in coop (small random movements)
+        this.updateIdleMovement(deltaTime);
     }
     
-    // Get hunger state name
-    getHungerState() {
-        if (this.hunger >= 75) return 'full';      // 75-100%
-        if (this.hunger >= 50) return 'satisfied'; // 50-74%
-        if (this.hunger >= 25) return 'hungry';    // 25-49%
-        if (this.hunger > 0) return 'very_hungry'; // 1-24%
-        return 'starving';                          // 0%
+    updateIdleMovement(deltaTime) {
+        // Random idle movement within coop
+        if (Math.random() < 0.01) {
+            this.targetX = 400 + (Math.random() - 0.5) * 60;
+            this.targetY = 80 + (Math.random() - 0.5) * 60;
+        }
+        
+        // Move toward target
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > 2) {
+            this.x += (dx / dist) * this.moveSpeed * deltaTime;
+            this.y += (dy / dist) * this.moveSpeed * deltaTime;
+            this.state = 'moving';
+        } else {
+            this.state = 'idle';
+        }
     }
     
-    // Feed the chicken
-    feed() {
-        if (this.hunger < 100 && !this.isBeingFed) {
-            this.hunger = 100;
-            this.isBeingFed = true;
-            this.feedingTimer = 1.0; // 1 second feeding animation
+    updateOutOfCoop(deltaTime) {
+        // Move toward house (south)
+        const speed = 60; // pixels per second (faster when fleeing)
+        this.y += speed * deltaTime;
+        this.state = 'fleeing';
+        
+        // Check escape at house (y=550)
+        if (this.y > 550) {
+            return 'escaped';
+        }
+        return null;
+    }
+    
+    getEggInterval() {
+        // Milliseconds between eggs based on hunger
+        if (this.hunger > 50) return 10000;  // 10 seconds
+        if (this.hunger > 20) return 20000;  // 20 seconds
+        if (this.hunger > 0) return 40000;   // 40 seconds
+        return Infinity;  // No eggs when starving
+    }
+    
+    layEgg() {
+        this.hasEgg = true;
+        this.eggTimer = 0;
+        this.state = 'laying';
+        // Brief laying animation
+        setTimeout(() => { if (this.state === 'laying') this.state = 'idle'; }, 500);
+    }
+    
+    collectEgg() {
+        if (this.hasEgg) {
+            this.hasEgg = false;
+            this.eggTimer = 0;
             return true;
         }
         return false;
     }
     
-    // Check if can be fed (in range)
-    canBeFed(hero) {
-        const dx = hero.x - this.x;
-        const dy = hero.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        return dist < 30 && this.hunger < 100 && !this.isBeingFed; // Within range and hungry
+    feed() {
+        this.hunger = 100;
+        this.state = 'eating';
+        setTimeout(() => { if (this.state === 'eating') this.state = 'idle'; }, 1000);
     }
     
-    moveTowardHole(deltaTime, dx, dy, dist, speedMultiplier) {
-        // Update hop cycle
-        this.hopTimer += deltaTime;
-        
-        if (this.hopState === 'hop') {
-            const hopProgress = Math.min(this.hopTimer / this.hopDuration, 1);
-            this.bounceY = -12 * Math.sin(hopProgress * Math.PI);
-            this.wingAngle = Math.sin(hopProgress * Math.PI * 4) * 0.4;
-            
-            if (this.hopTimer >= this.hopDuration) {
-                // Move toward hole with hunger speed modifier
-                const moveSpeed = this.hopDistance * speedMultiplier;
-                this.x += (dx / dist) * moveSpeed;
-                this.y += (dy / dist) * moveSpeed;
-                
-                this.hopState = 'pause';
-                this.hopTimer = 0;
-                this.bounceY = 0;
-                this.wingAngle = 0;
-            }
-        } else {
-            this.bounceY = Math.sin(Date.now() / 100) * 0.5;
-            this.wingAngle = 0;
-            
-            if (this.hopTimer >= this.pauseDuration * (1 / speedMultiplier)) {
-                this.hopState = 'hop';
-                this.hopTimer = 0;
-            }
-        }
+    leaveCoop() {
+        this.inCoop = false;
+        this.isFleeing = true;
+        this.state = 'fleeing';
+        // Push to just outside coop fence
+        this.y += 60;
     }
     
-    moveSouth(deltaTime, speedMultiplier) {
-        // Update weave (continuous sine wave for X)
-        this.weaveTime += deltaTime;
-        const weaveOffset = Math.sin(
-            this.weaveTime * this.weaveFrequency + this.weavePhase
-        ) * this.weaveAmplitude;
-        this.x = this.baseX + weaveOffset;
-        
-        // Update hop cycle with hunger speed modifier
-        this.hopTimer += deltaTime;
-        
-        if (this.hopState === 'hop') {
-            // During hop
-            const hopProgress = Math.min(this.hopTimer / this.hopDuration, 1);
-            
-            // Vertical bounce (parabolic arc)
-            this.bounceY = -12 * Math.sin(hopProgress * Math.PI);
-            
-            // Wing flap (rapid oscillation)
-            this.wingAngle = Math.sin(hopProgress * Math.PI * 4) * 0.4;
-            
-            // Head lag (slightly behind body movement)
-            const lagProgress = Math.max(0, hopProgress - 0.2);
-            this.headLag = Math.sin(lagProgress * Math.PI) * 3;
-            
-            if (this.hopTimer >= this.hopDuration) {
-                // End of hop - move forward with hunger speed modifier
-                this.y += this.hopDistance * speedMultiplier;
-                this.hopState = 'pause';
-                this.hopTimer = 0;
-                this.bounceY = 0;
-                this.wingAngle = 0;
-                this.headLag = 0;
-            }
-        } else {
-            // During pause (longer pause when hungry)
-            // Idle bob (breathing motion)
-            this.bounceY = Math.sin(this.weaveTime * 10) * 1;
-            this.wingAngle = 0;
-            this.headLag = 0;
-            
-            const adjustedPause = this.pauseDuration * (1 / speedMultiplier);
-            if (this.hopTimer >= adjustedPause) {
-                // Start next hop
-                this.hopState = 'hop';
-                this.hopTimer = 0;
-            }
-        }
+    returnToCoop() {
+        this.inCoop = true;
+        this.isFleeing = false;
+        this.x = 400 + (Math.random() - 0.5) * 40;
+        this.y = 80 + (Math.random() - 0.5) * 20;
+        this.state = 'idle';
     }
-
+    
     draw(ctx) {
-        const drawX = this.x;
-        const drawY = this.y + this.bounceY;
-        const hungerState = this.getHungerState();
-        
         ctx.save();
         
-        // Apply visual filters based on hunger state
+        // Draw chicken body
+        this.drawBody(ctx);
+        
+        // Draw egg indicator if has egg
+        if (this.hasEgg) {
+            this.drawEggIndicator(ctx);
+        }
+        
+        // Draw hunger indicator
+        this.drawHungerIndicator(ctx);
+        
+        // Draw fleeing indicator
+        if (this.isFleeing) {
+            this.drawFleeingIndicator(ctx);
+        }
+        
+        ctx.restore();
+    }
+    
+    drawBody(ctx) {
+        const hungerState = this.getHungerState();
+        
+        // Apply visual filters based on hunger
         switch(hungerState) {
             case 'full':
             case 'satisfied':
                 ctx.globalAlpha = 1.0;
                 break;
             case 'hungry':
-                // Slightly dim
                 ctx.filter = 'brightness(0.85)';
                 break;
             case 'very_hungry':
-                // Dim + slight grayscale
                 ctx.filter = 'brightness(0.7)';
                 break;
             case 'starving':
-                // Very dim + grayscale
                 ctx.filter = 'brightness(0.5) grayscale(0.6)';
                 break;
         }
         
-        // Shadow (on ground, not bouncing with chicken)
-        const shadowAlpha = this.hopState === 'hop' ? 0.08 : 0.15;
-        const shadowScale = this.hopState === 'hop' ? 0.8 : 1.0;
-        ctx.fillStyle = `rgba(0,0,0,${shadowAlpha})`;
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.beginPath();
-        ctx.ellipse(drawX, this.y + 10, 12 * shadowScale, 4 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x, this.y + 10, 12, 4, 0, 0, Math.PI * 2);
         ctx.fill();
         
         // Body
         ctx.fillStyle = this.color;
         ctx.beginPath();
-        ctx.ellipse(drawX, drawY, 12, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x, this.y, 12, 10, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Wing (with flap animation)
-        ctx.save();
-        ctx.translate(drawX - 5, drawY);
-        ctx.rotate(this.wingAngle);
+        // Wing
         ctx.fillStyle = this.color === '#fff' ? '#f5f5f5' : this.color;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x - 5, this.y, 8, 5, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
         
-        // Head (with lag)
-        const headX = drawX + this.headLag;
-        const headY = drawY - 8;
+        // Head
         ctx.fillStyle = this.color;
         ctx.beginPath();
-        ctx.arc(headX, headY, 7, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y - 8, 7, 0, Math.PI * 2);
         ctx.fill();
         
         // Beak
         ctx.fillStyle = '#ffa500';
         ctx.beginPath();
-        ctx.moveTo(headX + 5, headY - 2);
-        ctx.lineTo(headX + 12, headY);
-        ctx.lineTo(headX + 5, headY + 2);
+        ctx.moveTo(this.x + 5, this.y - 8);
+        ctx.lineTo(this.x + 12, this.y - 6);
+        ctx.lineTo(this.x + 5, this.y - 4);
         ctx.closePath();
         ctx.fill();
         
         // Eye
         ctx.fillStyle = '#000000';
         ctx.beginPath();
-        ctx.arc(headX + 3, headY - 2, 2, 0, Math.PI * 2);
+        ctx.arc(this.x + 3, this.y - 9, 2, 0, Math.PI * 2);
         ctx.fill();
         
         // Comb (red thing on head)
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
-        ctx.arc(headX, headY - 7, 4, Math.PI, 0);
+        ctx.arc(this.x, this.y - 15, 4, Math.PI, 0);
         ctx.fill();
         
-        // Legs (different during hop vs pause)
+        // Legs
         ctx.strokeStyle = '#ffa500';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        
-        if (this.hopState === 'hop') {
-            // Tucked legs during hop
-            ctx.moveTo(drawX - 5, drawY + 8);
-            ctx.lineTo(drawX - 3, drawY + 5);
-            ctx.moveTo(drawX + 5, drawY + 8);
-            ctx.lineTo(drawX + 3, drawY + 5);
-        } else {
-            // Standing legs during pause
-            ctx.moveTo(drawX - 5, drawY + 8);
-            ctx.lineTo(drawX - 5, drawY + 15);
-            ctx.moveTo(drawX + 5, drawY + 8);
-            ctx.lineTo(drawX + 5, drawY + 15);
-        }
+        ctx.moveTo(this.x - 5, this.y + 8);
+        ctx.lineTo(this.x - 5, this.y + 15);
+        ctx.moveTo(this.x + 5, this.y + 8);
+        ctx.lineTo(this.x + 5, this.y + 15);
         ctx.stroke();
         
         ctx.restore(); // Restore filter
-        
-        // Draw hunger indicator bar above chicken (not affected by filter)
-        this.drawHungerBar(ctx);
-        
-        // Draw starving effects
-        if (hungerState === 'starving') {
-            this.drawStarvingEffects(ctx);
-        }
-        
-        // Draw feeding effects
-        if (this.isBeingFed) {
-            this.drawFeedingEffects(ctx);
-        }
     }
     
-    // Draw hunger bar above chicken
-    drawHungerBar(ctx) {
-        const barWidth = 20;
-        const barHeight = 4;
-        const x = this.x - barWidth / 2;
-        const y = this.y - 35;
+    drawEggIndicator(ctx) {
+        // White egg above chicken
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y - 25, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Highlight
+        ctx.fillStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.ellipse(this.x - 2, this.y - 27, 2, 3, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Glow pulse
+        const pulse = Math.sin(this.animTimer * 3) * 0.3 + 0.7;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${pulse})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 25, 10, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    drawHungerIndicator(ctx) {
+        const yOffset = this.hasEgg ? -38 : -28;
+        const barWidth = 16;
+        const barHeight = 3;
         
         // Background
         ctx.fillStyle = '#333';
-        ctx.fillRect(x, y, barWidth, barHeight);
+        ctx.fillRect(this.x - barWidth/2, this.y + yOffset, barWidth, barHeight);
         
-        // Fill color based on hunger level
-        if (this.hunger > 50) {
-            ctx.fillStyle = '#4caf50'; // Green (healthy)
-        } else if (this.hunger > 25) {
-            ctx.fillStyle = '#ff9800'; // Orange (hungry)
-        } else {
-            ctx.fillStyle = '#f44336'; // Red (starving)
-        }
+        // Fill color based on hunger
+        if (this.hunger > 50) ctx.fillStyle = '#4caf50';
+        else if (this.hunger > 20) ctx.fillStyle = '#ff9800';
+        else ctx.fillStyle = '#f44336';
         
-        ctx.fillRect(x, y, barWidth * (this.hunger / 100), barHeight);
+        ctx.fillRect(this.x - barWidth/2, this.y + yOffset, barWidth * (this.hunger/100), barHeight);
     }
     
-    // Draw "zzz" bubbles when starving
-    drawStarvingEffects(ctx) {
-        const zOffset = Math.sin(this.starveAnimTimer * 2) * 3;
-        
-        ctx.fillStyle = '#9e9e9e';
-        ctx.font = '10px sans-serif';
+    drawFleeingIndicator(ctx) {
+        // Red exclamation
+        ctx.fillStyle = '#f44336';
+        ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
-        
-        // First z
-        ctx.fillText('z', this.x + 8, this.y - 25 + zOffset);
-        
-        // Second z (smaller)
-        ctx.font = '8px sans-serif';
-        ctx.fillText('z', this.x + 12, this.y - 30 + zOffset);
+        ctx.fillText('!', this.x, this.y - 45);
     }
     
-    // Draw feeding animation effects
-    drawFeedingEffects(ctx) {
-        const progress = 1 - (this.feedingTimer / 1.0); // 0 to 1
-        
-        // Heart floating up
-        const heartY = this.y - 30 - progress * 20;
-        ctx.fillStyle = '#e91e63';
-        ctx.font = '12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('❤', this.x, heartY);
-        
-        // Pecking animation (head bob)
-        const peckOffset = Math.sin(progress * Math.PI * 8) * 5;
-        ctx.fillStyle = '#ffa500';
-        ctx.beginPath();
-        ctx.moveTo(this.x + 12, this.y - 8 + peckOffset);
-        ctx.lineTo(this.x + 18, this.y - 5 + peckOffset);
-        ctx.lineTo(this.x + 12, this.y - 2 + peckOffset);
-        ctx.closePath();
-        ctx.fill();
+    getHungerState() {
+        if (this.hunger >= 75) return 'full';
+        if (this.hunger >= 50) return 'satisfied';
+        if (this.hunger >= 20) return 'hungry';
+        if (this.hunger > 0) return 'very_hungry';
+        return 'starving';
     }
-
+    
     getBounds() {
         return { x: this.x, y: this.y, radius: this.radius };
     }
