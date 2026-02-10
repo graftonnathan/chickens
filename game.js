@@ -41,7 +41,13 @@ class Game {
         
         // Bonus texts
         this.bonusTexts = [];
-        
+
+        // Interaction prompt
+        this.interactionPrompt = null;
+
+        // Spell UI
+        this.spellBarVisible = true;
+
         // Bind UI
         this.bindUI();
         
@@ -277,21 +283,232 @@ class Game {
         
         // Update raccoons
         this.updateRaccoons(deltaTime);
-        
+
+        // Handle E key interactions
+        this.handleInteractions();
+
         // Update bonus texts
         this.bonusTexts = this.bonusTexts.filter(text => {
             text.y -= 30 * deltaTime;
             text.life -= deltaTime;
             return text.life > 0;
         });
-        
+
         // Update particles
         this.particles.update();
-        
+
         // Check win/lose
         this.checkWinLose();
-        
+
+        // Update UI
+        this.updateChickenCards();
+        this.updateSpellBar();
+        this.updateInteractionPrompt();
         this.updateUI();
+    }
+
+    handleInteractions() {
+        if (!this.input.isInteractPressed()) return;
+
+        const hero = this.hero;
+
+        // 1. Try to catch escaped chickens
+        const escapedChickens = this.chickenManager.chickens.filter(c => !c.inCoop && c.state === 'escaped');
+        for (const chicken of escapedChickens) {
+            if (chicken.canBeCaught(hero)) {
+                chicken.returnToCoop(this.coop);
+                this.addBonusText(chicken.x, chicken.y - 30, '🐔 CAUGHT!');
+                this.particles.spawn(chicken.x, chicken.y, 'heart', 5);
+                return;
+            }
+        }
+
+        // 2. Try to pick up/drop tool
+        if (hero.currentTool) {
+            // Drop current tool
+            const tool = hero.dropTool();
+            if (tool) {
+                tool.x = hero.x;
+                tool.y = hero.y;
+                this.addBonusText(hero.x, hero.y - 30, 'DROPPED');
+            }
+        } else {
+            // Try to pick up a tool
+            const availableTools = this.toolManager.checkPickups(hero);
+            for (const tool of availableTools) {
+                if (hero.pickUpTool(tool)) {
+                    const toolName = tool.type === 'eggBasket' ? '🧺 BASKET' :
+                                    tool.type === 'hammer' ? '🔨 HAMMER' : '🌾 FOOD';
+                    this.addBonusText(hero.x, hero.y - 30, `+${toolName}`);
+                    return;
+                }
+            }
+        }
+
+        // 3. Collect eggs with E if in coop with basket
+        const fenceResult = this.coop.pushOutside(hero.x, hero.y, hero.radius, hero);
+        if (fenceResult.inCoop || fenceResult.inGap) {
+            const eggBasket = hero.getTool('eggBasket');
+            if (eggBasket && eggBasket.canCollect()) {
+                const chickens = this.chickenManager.getChickensWithEggs();
+                let collected = 0;
+
+                for (const chicken of chickens) {
+                    const dist = Math.hypot(chicken.x - hero.x, chicken.y - hero.y);
+                    if (dist < 50 && eggBasket.canCollect()) {
+                        if (chicken.collectEgg()) {
+                            eggBasket.collectEgg();
+                            collected++;
+                            this.particles.spawn(chicken.x, chicken.y, 'sparkle', 5);
+                        }
+                    }
+                }
+
+                if (collected > 0) {
+                    this.addBonusText(hero.x, hero.y - 30, `+${collected} 🥚`);
+                }
+            }
+        }
+    }
+
+    updateChickenCards() {
+        const container = document.getElementById('chickenCards');
+        if (!container || !this.chickenManager) return;
+
+        // Clear existing cards
+        container.innerHTML = '';
+
+        // Create card for each chicken
+        this.chickenManager.chickens.forEach((chicken, index) => {
+            const card = document.createElement('div');
+            card.className = 'chicken-card';
+
+            // Add state classes
+            if (!chicken.inCoop) card.classList.add('escaped');
+            if (chicken.isEscaping) card.classList.add('escaping');
+
+            // Type icon
+            const typeIcon = chicken.chickenType === 'golden' ? '👑' :
+                            chicken.chickenType === 'rare' ? '💎' : '🐔';
+
+            // Hunger hearts
+            const hearts = Math.ceil(chicken.hunger / 20);
+            const hungerDisplay = '❤'.repeat(hearts) + '○'.repeat(5 - hearts);
+
+            // Escape timer bar
+            let timerHtml = '';
+            if (chicken.hasEgg && !chicken.isEscaping) {
+                const threshold = chicken.escapeThresholds[chicken.chickenType] || 45;
+                const percent = (chicken.escapeTimer / threshold) * 100;
+                const timerClass = percent > 50 ? 'safe' : percent > 25 ? 'warning' : 'danger';
+                timerHtml = `<div class="chicken-card-timer"><div class="fill ${timerClass}" style="width: ${percent}%"></div></div>`;
+            }
+
+            // Status icon
+            let statusIcon = '●'; // idle
+            if (chicken.isEscaping) statusIcon = '🏃';
+            else if (!chicken.inCoop) statusIcon = '❌';
+            else if (chicken.hasEgg) statusIcon = '🥚';
+            else if (chicken.hunger < 30) statusIcon = '🍽️';
+
+            card.innerHTML = `
+                <div class="chicken-card-header">
+                    <span class="chicken-card-id">#${index + 1}</span>
+                    <span class="chicken-card-type">${typeIcon}</span>
+                </div>
+                <div class="chicken-card-body">
+                    <div class="chicken-card-portrait">${typeIcon}</div>
+                    <div class="chicken-card-stats">
+                        <div class="chicken-card-hunger">${hungerDisplay}</div>
+                        <div class="chicken-card-eggs">🥚 ${chicken.eggsLaid}</div>
+                    </div>
+                </div>
+                ${timerHtml}
+                <div class="chicken-card-status">${statusIcon}</div>
+            `;
+
+            container.appendChild(card);
+        });
+    }
+
+    updateSpellBar() {
+        const spellBar = document.getElementById('spellBar');
+        if (!spellBar) return;
+
+        const slots = spellBar.querySelectorAll('.spell-slot');
+        slots.forEach((slot, index) => {
+            const cooldown = this.hero.getSpellCooldown(index);
+            const cooldownEl = slot.querySelector('.spell-cooldown');
+
+            if (cooldown > 0) {
+                slot.classList.remove('ready');
+                slot.classList.add('on-cooldown');
+                cooldownEl.textContent = `${cooldown.toFixed(1)}s`;
+            } else {
+                slot.classList.add('ready');
+                slot.classList.remove('on-cooldown');
+                cooldownEl.textContent = 'READY';
+            }
+        });
+    }
+
+    updateInteractionPrompt() {
+        const prompt = document.getElementById('interactionPrompt');
+        if (!prompt) return;
+
+        let showPrompt = false;
+        let actionText = 'INTERACT';
+
+        // Check for catchable chickens
+        const escapedChickens = this.chickenManager.chickens.filter(c => !c.inCoop && c.state === 'escaped');
+        for (const chicken of escapedChickens) {
+            if (chicken.canBeCaught(this.hero)) {
+                showPrompt = true;
+                actionText = 'CATCH CHICKEN';
+                break;
+            }
+        }
+
+        // Check for tools
+        if (!showPrompt && !this.hero.currentTool) {
+            const availableTools = this.toolManager.checkPickups(this.hero);
+            if (availableTools.length > 0) {
+                showPrompt = true;
+                actionText = 'PICK UP TOOL';
+            }
+        }
+
+        // Check for droppable tool
+        if (!showPrompt && this.hero.currentTool) {
+            showPrompt = true;
+            actionText = 'DROP TOOL';
+        }
+
+        // Check for egg collection in coop
+        if (!showPrompt) {
+            const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
+            if (fenceResult.inCoop || fenceResult.inGap) {
+                const eggBasket = this.hero.getTool('eggBasket');
+                if (eggBasket && eggBasket.canCollect()) {
+                    const chickens = this.chickenManager.getChickensWithEggs();
+                    for (const chicken of chickens) {
+                        const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
+                        if (dist < 50) {
+                            showPrompt = true;
+                            actionText = 'COLLECT EGG';
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showPrompt) {
+            prompt.classList.remove('hidden');
+            prompt.querySelector('.action').textContent = actionText;
+        } else {
+            prompt.classList.add('hidden');
+        }
     }
     
     checkWinLose() {

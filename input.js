@@ -4,12 +4,17 @@
 class InputHandler {
     constructor() {
         this.keys = {};
+        this.justPressed = {}; // For one-shot key detection
         this.setupListeners();
     }
 
     setupListeners() {
         window.addEventListener('keydown', (e) => {
-            this.keys[e.key.toLowerCase()] = true;
+            const key = e.key.toLowerCase();
+            if (!this.keys[key]) {
+                this.justPressed[key] = true;
+            }
+            this.keys[key] = true;
         });
 
         window.addEventListener('keyup', (e) => {
@@ -39,5 +44,36 @@ class InputHandler {
 
     isPressed(key) {
         return !!this.keys[key.toLowerCase()];
+    }
+
+    isJustPressed(key) {
+        const k = key.toLowerCase();
+        if (this.justPressed[k]) {
+            this.justPressed[k] = false;
+            return true;
+        }
+        return false;
+    }
+
+    // Sprint key
+    isSprinting() {
+        return this.keys['shift'];
+    }
+
+    // Interaction key
+    isInteractPressed() {
+        return this.isJustPressed('e');
+    }
+
+    // Spell keys
+    getSpellPressed() {
+        if (this.isJustPressed('1')) return 1;
+        if (this.isJustPressed('2')) return 2;
+        if (this.isJustPressed('3')) return 3;
+        return null;
+    }
+
+    clearJustPressed() {
+        this.justPressed = {};
     }
 }

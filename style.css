@@ -201,6 +201,249 @@ body {
     transform: translateY(0);
 }
 
+/* Chicken UI Cards */
+.chicken-cards-container {
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+    max-width: 780px;
+    overflow-x: auto;
+    padding: 4px;
+}
+
+.chicken-card {
+    width: 100px;
+    height: 75px;
+    background: linear-gradient(135deg, rgba(26, 47, 21, 0.95) 0%, rgba(45, 74, 34, 0.95) 100%);
+    border: 2px solid var(--wood-brown);
+    border-radius: 8px;
+    padding: 6px;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    transition: transform 0.15s ease;
+}
+
+.chicken-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent-gold);
+}
+
+.chicken-card.escaped {
+    opacity: 0.5;
+    filter: grayscale(0.6);
+}
+
+.chicken-card.escaping {
+    border-color: var(--accent-red);
+    animation: pulse-red 0.5s ease infinite;
+}
+
+@keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 5px var(--accent-red); }
+    50% { box-shadow: 0 0 15px var(--accent-red); }
+}
+
+.chicken-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.chicken-card-id {
+    font-size: 9px;
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.chicken-card-type {
+    font-size: 10px;
+}
+
+.chicken-card-body {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chicken-card-portrait {
+    width: 28px;
+    height: 28px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.chicken-card-stats {
+    flex: 1;
+}
+
+.chicken-card-hunger {
+    font-size: 8px;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.chicken-card-hunger .full { color: #e74c3c; }
+.chicken-card-hunger .empty { color: #444; opacity: 0.5; }
+
+.chicken-card-eggs {
+    font-size: 10px;
+    color: var(--accent-gold);
+}
+
+.chicken-card-timer {
+    height: 3px;
+    background: #333;
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.chicken-card-timer .fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.chicken-card-timer .fill.safe { background: #2ecc71; }
+.chicken-card-timer .fill.warning { background: #ff9800; }
+.chicken-card-timer .fill.danger { background: #e74c3c; }
+
+.chicken-card-status {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 10px;
+}
+
+/* Spell Bar */
+.spell-bar {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 10;
+}
+
+.spell-slot {
+    width: 70px;
+    height: 80px;
+    background: linear-gradient(135deg, rgba(26, 47, 21, 0.95) 0%, rgba(45, 74, 34, 0.95) 100%);
+    border: 3px solid var(--wood-brown);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.15s ease;
+}
+
+.spell-slot:hover {
+    border-color: var(--accent-gold);
+    transform: scale(1.05);
+}
+
+.spell-slot.ready {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.3);
+}
+
+.spell-slot.on-cooldown {
+    opacity: 0.6;
+    border-color: var(--wood-dark);
+}
+
+.spell-hotkey {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 10px;
+    color: var(--wood-brown);
+    font-weight: bold;
+    background: rgba(0,0,0,0.3);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.spell-icon {
+    font-size: 28px;
+    margin-top: 4px;
+}
+
+.spell-name {
+    font-size: 9px;
+    color: var(--text-color);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+}
+
+.spell-cooldown {
+    font-size: 12px;
+    color: var(--accent-red);
+    font-weight: bold;
+    margin-top: 2px;
+}
+
+.spell-slot.ready .spell-cooldown {
+    color: var(--accent-green);
+    font-size: 9px;
+}
+
+/* Interaction Prompt */
+.interaction-prompt {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 2px solid var(--accent-gold);
+    z-index: 20;
+    animation: bounce 1s ease infinite;
+}
+
+.interaction-prompt.hidden {
+    display: none;
+}
+
+.interaction-prompt .key {
+    background: var(--accent-gold);
+    color: var(--hud-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.interaction-prompt .action {
+    color: var(--text-color);
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+    50% { transform: translate(-50%, -50%) translateY(-4px); }
+}
+
 /* Responsive */
 @media (max-width: 850px) {
     #gameCanvas {
@@ -208,9 +451,18 @@ body {
         max-width: 600px;
         height: auto;
     }
-    
+
     .hud {
         width: 100%;
         max-width: 600px;
+    }
+
+    .chicken-cards-container {
+        max-width: 580px;
+    }
+
+    .chicken-card {
+        width: 85px;
+        height: 65px;
     }
 }

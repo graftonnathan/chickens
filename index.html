@@ -8,6 +8,9 @@
 </head>
 <body>
     <div class="game-container">
+        <!-- Chicken UI Cards -->
+        <div id="chickenCards" class="chicken-cards-container"></div>
+
         <div class="hud">
             <div class="hud-item">
                 <span class="hud-label">DEPOSITED</span>
@@ -26,10 +29,38 @@
                 <span id="time" class="hud-value">0:00</span>
             </div>
         </div>
-        
+
         <canvas id="gameCanvas" width="800" height="600"></canvas>
-        
-        <div class="controls-hint">WASD to Move • Carry 2 (chickens/basket) • Deposit chickens at Coop • Eggs at House</div>
+
+        <!-- Spell Bar -->
+        <div id="spellBar" class="spell-bar">
+            <div class="spell-slot" data-slot="0">
+                <span class="spell-hotkey">1</span>
+                <span class="spell-icon">❄️</span>
+                <span class="spell-name">Freeze</span>
+                <span class="spell-cooldown"></span>
+            </div>
+            <div class="spell-slot" data-slot="1">
+                <span class="spell-hotkey">2</span>
+                <span class="spell-icon">🧲</span>
+                <span class="spell-name">Attract</span>
+                <span class="spell-cooldown"></span>
+            </div>
+            <div class="spell-slot" data-slot="2">
+                <span class="spell-hotkey">3</span>
+                <span class="spell-icon">⚡</span>
+                <span class="spell-name">Speed</span>
+                <span class="spell-cooldown"></span>
+            </div>
+        </div>
+
+        <!-- Interaction Prompt -->
+        <div id="interactionPrompt" class="interaction-prompt hidden">
+            <span class="key">E</span>
+            <span class="action">INTERACT</span>
+        </div>
+
+        <div class="controls-hint">WASD to Move • SHIFT to Sprint • E to Interact • 1/2/3 for Spells</div>
     </div>
 
     <!-- Start Screen -->

@@ -25,6 +25,36 @@ class Particle {
             this.color = '#00ffff';
             this.size = Math.random() * 3 + 1;
             this.decay = 0.03;
+        } else if (type === 'freeze_burst') {
+            this.vx = (Math.random() - 0.5) * 6;
+            this.vy = (Math.random() - 0.5) * 6;
+            this.color = '#3498db';
+            this.size = Math.random() * 5 + 3;
+            this.decay = 0.02;
+        } else if (type === 'attract_burst') {
+            this.vx = (Math.random() - 0.5) * 4;
+            this.vy = (Math.random() - 0.5) * 4;
+            this.color = '#9b59b6';
+            this.size = Math.random() * 4 + 2;
+            this.decay = 0.025;
+        } else if (type === 'speed_burst') {
+            this.vx = (Math.random() - 0.5) * 5;
+            this.vy = (Math.random() - 0.5) * 5;
+            this.color = '#f1c40f';
+            this.size = Math.random() * 4 + 2;
+            this.decay = 0.025;
+        } else if (type === 'heart') {
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = -Math.random() * 2 - 1;
+            this.color = '#e74c3c';
+            this.size = Math.random() * 4 + 3;
+            this.decay = 0.02;
+        } else if (type === 'deposit') {
+            this.vx = (Math.random() - 0.5) * 3;
+            this.vy = -Math.random() * 3 - 1;
+            this.color = '#ffd700';
+            this.size = Math.random() * 3 + 2;
+            this.decay = 0.03;
         }
     }
 

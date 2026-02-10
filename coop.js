@@ -1,41 +1,68 @@
 /**
- * Coop class - Garden Shed with fence barrier and chicken management
+ * Coop class - Garden Shed with redesigned fence barrier and chicken management
+ * Larger coop with southern barrier featuring:
+ * - Small chicken escape opening
+ * - Player access opening for egg harvest/feeding
  */
 class Coop {
     constructor(x, y) {
         this.x = x || 400;
         this.y = y || 80;
-        this.width = 70;
-        this.height = 55;
-        
-        // Fence barrier properties - fence on N/E/W, gap on SOUTH
-        this.fenceRadius = 50;
+        this.width = 90;   // Larger shed
+        this.height = 65;  // Taller shed
+
+        // New fence barrier properties - larger radius
+        this.fenceRadius = 90;       // Increased from 50
         this.fenceHeight = 30;
-        this.gapStart = Math.PI * 0.25;  // 45 degrees (SE)
-        this.gapEnd = Math.PI * 0.75;    // 135 degrees (SW)
-        
+
+        // South side openings
+        // Chicken escape gap (small, south side)
+        this.chickenGapStart = Math.PI * 0.40;  // ~72 degrees
+        this.chickenGapEnd = Math.PI * 0.50;    // ~90 degrees (center south)
+
+        // Player access gap (larger, also on south side but offset)
+        this.playerGapStart = Math.PI * 0.55;   // ~99 degrees
+        this.playerGapEnd = Math.PI * 0.70;     // ~126 degrees
+
+        // Gap markers for visual indication
+        this.gapMarkers = [
+            { angle: (this.chickenGapStart + this.chickenGapEnd) / 2, type: 'chicken', label: '🐔' },
+            { angle: (this.playerGapStart + this.playerGapEnd) / 2, type: 'player', label: '🚪' }
+        ];
+
         // Chicken management
         this.chickens = [];
         this.maxChickens = 12;
-        
+
         // Spook state
         this.wasSpooked = false;
         this.spookTimer = 0;
-        
+
+        // Escape tracking
+        this.escapedChickens = [];
+
         // Initialize 12 chickens in coop
         this.initChickens();
     }
     
     initChickens() {
         for (let i = 0; i < 12; i++) {
-            // Random position inside fence
-            const angle = Math.random() * Math.PI * 2;
-            const dist = Math.random() * (this.fenceRadius - 20);
+            // Spawn chickens in a circle pattern inside fence, keeping clear of openings
+            const angle = (i / 12) * Math.PI * 2;
+            // Keep chickens within inner 70% of fence radius, away from edges
+            const dist = 15 + Math.random() * 35;
+
             const chicken = new Chicken(
                 i,
                 this.x + Math.cos(angle) * dist,
                 this.y + Math.sin(angle) * dist
             );
+
+            // Ensure chickens start in coop
+            chicken.inCoop = true;
+            chicken.isFleeing = false;
+            chicken.state = 'idle';
+
             this.chickens.push(chicken);
         }
     }
@@ -49,7 +76,7 @@ class Coop {
                 this.spookTimer = 0;
             }
         }
-        
+
         // Update all chickens
         const escaped = [];
         this.chickens.forEach(chicken => {
@@ -58,15 +85,16 @@ class Coop {
                 escaped.push(chicken);
             }
         });
-        
-        // Remove escaped chickens
+
+        // Remove fully escaped chickens (reached house)
         escaped.forEach(chicken => {
             const idx = this.chickens.indexOf(chicken);
             if (idx > -1) {
                 this.chickens.splice(idx, 1);
+                this.escapedChickens.push(chicken);
             }
         });
-        
+
         return escaped.length; // Return number of escaped chickens
     }
     
@@ -205,25 +233,23 @@ class Coop {
     }
     
     drawFence(ctx) {
-        const posts = 8;
-        const arcLength = Math.PI * 2 - (this.gapEnd - this.gapStart);
-        const angleStep = arcLength / posts;
-        
-        // Draw rails
+        const posts = 12; // More posts for larger fence
+        const totalPosts = posts + 2; // Extra posts for gaps
+
+        // Draw rails - skip the gap areas
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        
+
         // Top rail
         ctx.beginPath();
         let first = true;
-        for (let i = 0; i <= posts; i++) {
-            let angle = this.gapEnd + i * angleStep;
-            if (angle > Math.PI * 2) angle -= Math.PI * 2;
-            if (this.isAngleInGap(angle)) continue;
-            
+        for (let i = 0; i <= totalPosts; i++) {
+            const angle = (i / totalPosts) * Math.PI * 2;
+            if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
+
             const px = this.x + Math.cos(angle) * this.fenceRadius;
             const py = this.y + Math.sin(angle) * this.fenceRadius - this.fenceHeight;
-            
+
             if (first) {
                 ctx.moveTo(px, py);
                 first = false;
@@ -232,18 +258,17 @@ class Coop {
             }
         }
         ctx.stroke();
-        
+
         // Bottom rail
         ctx.beginPath();
         first = true;
-        for (let i = 0; i <= posts; i++) {
-            let angle = this.gapEnd + i * angleStep;
-            if (angle > Math.PI * 2) angle -= Math.PI * 2;
-            if (this.isAngleInGap(angle)) continue;
-            
+        for (let i = 0; i <= totalPosts; i++) {
+            const angle = (i / totalPosts) * Math.PI * 2;
+            if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
+
             const px = this.x + Math.cos(angle) * this.fenceRadius;
             const py = this.y + Math.sin(angle) * this.fenceRadius - this.fenceHeight + 15;
-            
+
             if (first) {
                 ctx.moveTo(px, py);
                 first = false;
@@ -252,17 +277,35 @@ class Coop {
             }
         }
         ctx.stroke();
-        
+
         // Draw posts
-        for (let i = 0; i <= posts; i++) {
-            let angle = this.gapEnd + i * angleStep;
-            if (angle > Math.PI * 2) angle -= Math.PI * 2;
-            if (this.isAngleInGap(angle)) continue;
-            
+        for (let i = 0; i <= totalPosts; i++) {
+            const angle = (i / totalPosts) * Math.PI * 2;
+            if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
+
             const px = this.x + Math.cos(angle) * this.fenceRadius;
             const py = this.y + Math.sin(angle) * this.fenceRadius;
             this.drawFencePost(ctx, px, py);
         }
+
+        // Draw gap borders (posts at edges of gaps)
+        this.drawGapBorders(ctx);
+    }
+
+    drawGapBorders(ctx) {
+        // Chicken gap borders
+        [this.chickenGapStart, this.chickenGapEnd].forEach(angle => {
+            const px = this.x + Math.cos(angle) * this.fenceRadius;
+            const py = this.y + Math.sin(angle) * this.fenceRadius;
+            this.drawFencePost(ctx, px, py);
+        });
+
+        // Player gap borders
+        [this.playerGapStart, this.playerGapEnd].forEach(angle => {
+            const px = this.x + Math.cos(angle) * this.fenceRadius;
+            const py = this.y + Math.sin(angle) * this.fenceRadius;
+            this.drawFencePost(ctx, px, py);
+        });
     }
     
     drawFencePost(ctx, x, y) {
@@ -283,36 +326,68 @@ class Coop {
     }
     
     drawGapMarkers(ctx) {
-        const markerAngles = [this.gapStart, this.gapEnd];
-        
-        markerAngles.forEach(angle => {
-            const px = this.x + Math.cos(angle) * this.fenceRadius;
-            const py = this.y + Math.sin(angle) * this.fenceRadius;
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(px - 2, py - 20, 4, 20);
-            
-            ctx.strokeStyle = '#e0e0e0';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(px - 2, py - 20, 4, 20);
-            
+        // Draw gap markers with icons
+        this.gapMarkers.forEach(marker => {
+            const px = this.x + Math.cos(marker.angle) * this.fenceRadius;
+            const py = this.y + Math.sin(marker.angle) * this.fenceRadius;
+
+            // Pulsing gold orb
+            const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+
+            // Glow
+            ctx.fillStyle = `rgba(255, 215, 0, ${0.3 * pulse})`;
+            ctx.beginPath();
+            ctx.arc(px, py - 15, 8 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Core
             ctx.fillStyle = '#ffd700';
             ctx.beginPath();
-            ctx.arc(px, py - 25, 3, 0, Math.PI * 2);
+            ctx.arc(px, py - 15, 4, 0, Math.PI * 2);
             ctx.fill();
-            
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-            ctx.beginPath();
-            ctx.arc(px, py - 25, 5, 0, Math.PI * 2);
-            ctx.fill();
+
+            // Label
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(marker.label, px, py + 10);
         });
+
+        // Draw gap labels
+        const chickenAngle = (this.chickenGapStart + this.chickenGapEnd) / 2;
+        const playerAngle = (this.playerGapStart + this.playerGapEnd) / 2;
+
+        const cpx = this.x + Math.cos(chickenAngle) * (this.fenceRadius + 25);
+        const cpy = this.y + Math.sin(chickenAngle) * (this.fenceRadius + 25);
+
+        const ppx = this.x + Math.cos(playerAngle) * (this.fenceRadius + 25);
+        const ppy = this.y + Math.sin(playerAngle) * (this.fenceRadius + 25);
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('CHICKEN EXIT', cpx, cpy);
+        ctx.fillText('PLAYER ACCESS', ppx, ppy);
+        ctx.restore();
     }
-    
-    isAngleInGap(angle) {
+
+    isAngleInChickenGap(angle) {
         let normalized = angle;
         while (normalized < 0) normalized += Math.PI * 2;
         while (normalized > Math.PI * 2) normalized -= Math.PI * 2;
-        return normalized >= this.gapStart && normalized <= this.gapEnd;
+        return normalized >= this.chickenGapStart && normalized <= this.chickenGapEnd;
+    }
+
+    isAngleInPlayerGap(angle) {
+        let normalized = angle;
+        while (normalized < 0) normalized += Math.PI * 2;
+        while (normalized > Math.PI * 2) normalized -= Math.PI * 2;
+        return normalized >= this.playerGapStart && normalized <= this.playerGapEnd;
+    }
+
+    isAngleInGap(angle) {
+        return this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle);
     }
     
     isInsideFence(x, y) {
@@ -333,19 +408,25 @@ class Coop {
         const dy = y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx);
-        
+
         const hasBasket = hero && hero.hasTool && hero.hasTool('eggBasket');
-        const inGap = this.isAngleInGap(angle);
-        
+        const inChickenGap = this.isAngleInChickenGap(angle);
+        const inPlayerGap = this.isAngleInPlayerGap(angle);
+        const inAnyGap = inChickenGap || inPlayerGap;
+
+        // Inside the fence
         if (dist < this.fenceRadius - radius) {
-            if (hasBasket && inGap) {
+            // Player with basket can enter through player gap
+            if (hasBasket && inPlayerGap) {
                 return { x, y, inGap: true, inCoop: true };
             }
-            
-            if (inGap) {
+
+            // Can exit through any gap
+            if (inAnyGap) {
                 return { x, y, inGap: true, inCoop: false };
             }
-            
+
+            // Push to fence edge
             const targetDist = this.fenceRadius - radius;
             return {
                 x: this.x + (dx / dist) * targetDist,
@@ -354,8 +435,21 @@ class Coop {
                 inCoop: false
             };
         }
-        
-        return { x, y, inGap: inGap && dist < this.fenceRadius + radius, inCoop: false };
+
+        return { x, y, inGap: inAnyGap && dist < this.fenceRadius + radius, inCoop: false };
+    }
+
+    // Check if a chicken is at the escape gap
+    isAtEscapeGap(chicken) {
+        const dx = chicken.x - this.x;
+        const dy = chicken.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+
+        const nearFence = Math.abs(dist - this.fenceRadius) < 20;
+        const inChickenGap = this.isAngleInChickenGap(angle);
+
+        return nearFence && inChickenGap;
     }
     
     isAtDepositZone(hero) {
@@ -363,28 +457,30 @@ class Coop {
         const dy = hero.y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx);
-        
-        const nearFence = Math.abs(dist - this.fenceRadius) < hero.radius + 5;
-        const inGap = this.isAngleInGap(angle);
-        
-        return nearFence && inGap;
+
+        const nearFence = Math.abs(dist - this.fenceRadius) < hero.radius + 10;
+        const inPlayerGap = this.isAngleInPlayerGap(angle);
+
+        return nearFence && inPlayerGap;
     }
-    
+
     drawDepositHint(ctx, hero) {
         if (!this.isAtDepositZone(hero)) return;
-        
-        const gapCenterAngle = (this.gapStart + this.gapEnd) / 2;
+
+        const gapCenterAngle = (this.playerGapStart + this.playerGapEnd) / 2;
         const hintX = this.x + Math.cos(gapCenterAngle) * this.fenceRadius;
         const hintY = this.y + Math.sin(gapCenterAngle) * this.fenceRadius + 30;
-        
+
         const pulse = Math.sin(Date.now() / 200) * 3;
-        
+
         ctx.save();
         ctx.fillStyle = '#ffd700';
         ctx.font = 'bold 12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('▼ ENTER ▼', hintX, hintY);
-        
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#000';
+        ctx.fillText('[E] ENTER COOP', hintX, hintY);
+
         ctx.fillStyle = '#ffd700';
         ctx.beginPath();
         ctx.moveTo(hintX, hintY + 10 + pulse);
