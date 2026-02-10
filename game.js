@@ -146,15 +146,14 @@ class Game {
         if (hero.carrying.isCarrying && hero.carrying.chicken) {
             const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
             if (distToCoop < hero.ranges.depositRadius && this.coop.chickens.length < this.coop.maxChickens) {
+                const chicken = hero.carrying.chicken;  // Cache before deposit clears it
                 const deposited = hero.depositChicken(this.coop);
-                if (deposited) {
-                    const chicken = hero.carrying.chicken;
+                if (deposited && chicken) {  // Use cached reference with null guard
                     this.addBonusText(chicken.x, chicken.y - 30, '+DEPOSITED');
                     this.particles.spawn(chicken.x, chicken.y, 'poof', 10);
                 }
             }
         }
-    }
     }
     
     gameWin() {
