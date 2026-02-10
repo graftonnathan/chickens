@@ -107,10 +107,29 @@ class Chicken {
 
         // Wandering angle for wild chickens
         this.wanderAngle = Math.random() * Math.PI * 2;
+
+        // Spawn animation for fade-in effect
+        this.spawnAnimation = {
+            active: false,
+            progress: 1.0,
+            delay: 0
+        };
     }
     
     update(deltaTime, coop, gameTime) {
         this.animTimer += deltaTime;
+
+        // Handle spawn animation (fade-in)
+        if (this.spawnAnimation.active) {
+            this.spawnAnimation.delay -= deltaTime;
+            if (this.spawnAnimation.delay <= 0) {
+                this.spawnAnimation.progress += deltaTime * 2; // Fade in over 0.5 seconds
+                if (this.spawnAnimation.progress >= 1.0) {
+                    this.spawnAnimation.progress = 1.0;
+                    this.spawnAnimation.active = false;
+                }
+            }
+        }
 
         // Handle frozen state
         if (this.isFrozen) {
@@ -408,6 +427,11 @@ class Chicken {
     
     draw(ctx) {
         ctx.save();
+
+        // Draw spawn animation (fade-in)
+        if (this.spawnAnimation.active && this.spawnAnimation.progress < 1.0) {
+            ctx.globalAlpha = this.spawnAnimation.progress;
+        }
 
         // Draw frozen effect
         if (this.isFrozen) {

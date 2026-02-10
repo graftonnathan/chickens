@@ -89,8 +89,9 @@ class Game {
         this.hero = new Hero(400, 500); // Start near house
         this.coop = new Coop(400, 80);
 
-        // Spawn wild chickens in the field (not in coop)
-        this.wildChickens = this.spawnWildChickens();
+        // All chickens now start inside the coop
+        // Wild chickens array is empty at start - chickens escape from coop over time
+        this.wildChickens = [];
 
         this.raccoons = [];
         this.raccoonSpawner.reset();

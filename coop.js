@@ -46,8 +46,45 @@ class Coop {
     }
     
     initChickens() {
-        // Start with empty coop - chickens spawn wild in the field
+        // Initialize 12 chickens inside the coop using golden angle spiral distribution
         this.chickens = [];
+        const types = Object.keys(CHICKEN_TYPE_TEMPLATES);
+        const maxChickens = this.maxChickens;
+        
+        // Golden angle for natural distribution (in radians)
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        
+        for (let i = 0; i < maxChickens; i++) {
+            // Golden angle spiral distribution
+            const t = (i + 0.5) / maxChickens;
+            const angle = i * goldenAngle;
+            const radius = 20 + t * (this.fenceRadius - 40); // Keep within fence with padding
+            
+            // Calculate position relative to coop center
+            const x = this.x + Math.cos(angle) * radius;
+            const y = this.y + Math.sin(angle) * radius;
+            
+            // Create chicken with staggered type assignment
+            const chickenType = types[i % types.length];
+            const chicken = new Chicken(i, x, y, chickenType);
+            
+            // Set initial state to in_coop
+            chicken.state = 'in_coop';
+            chicken.coopResidency = {
+                inCoop: true,
+                coopId: this,
+                entryTime: Date.now() / 1000 - Math.random() * 30 // Random entry time for variety
+            };
+            
+            // Stagger fade-in animation
+            chicken.spawnAnimation = {
+                active: true,
+                progress: 0,
+                delay: i * 0.1 // 100ms stagger between each chicken
+            };
+            
+            this.chickens.push(chicken);
+        }
     }
 
     addChicken(chicken) {
