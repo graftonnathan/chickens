@@ -1,0 +1,16 @@
+{
+  "twelveChickens": true,
+  "eggSystem": true,
+  "foodSystem": false,
+  "winCondition": true,
+  "gameRuns": true,
+  "screenshots": [
+    "redesign-start.png",
+    "redesign-game.png",
+    "redesign-final.png"
+  ],
+  "observations": [
+    "Game: Score=🥚 0/100, Lives=🐔 12/12"
+  ],
+  "overall": "FAIL"
+}
