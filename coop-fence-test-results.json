@@ -7,7 +7,7 @@
     "coop-fence-final.png"
   ],
   "observations": [
-    "Game running: Score=🥚 0/100, Lives=🐔 0/12, Time=0:02"
+    "Game running: Score=🥚 0/100, Lives=🐔 0 coop / 12 wild, Time=0:02"
   ],
   "overall": "FAIL"
 }

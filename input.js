@@ -10,15 +10,33 @@ class InputHandler {
 
     setupListeners() {
         window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
+            // Defensive check: e.key may be undefined in some browser contexts
+            const rawKey = e.key || e.code || '';
+            const key = rawKey.toLowerCase();
+            if (!key) return; // Skip if no valid key
+
             if (!this.keys[key]) {
                 this.justPressed[key] = true;
             }
             this.keys[key] = true;
+
+            // Also handle shift key variations
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || key === 'shift') {
+                this.keys['shift'] = true;
+            }
         });
 
         window.addEventListener('keyup', (e) => {
-            this.keys[e.key.toLowerCase()] = false;
+            const rawKey = e.key || e.code || '';
+            const key = rawKey.toLowerCase();
+            if (!key) return;
+
+            this.keys[key] = false;
+
+            // Also handle shift key variations
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || key === 'shift') {
+                this.keys['shift'] = false;
+            }
         });
     }
 

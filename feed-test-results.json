@@ -6,7 +6,7 @@
     "feed-test-final.png"
   ],
   "observations": [
-    "Initial: Score=0/50, Lives=3",
+    "Initial: Score=🥚 0/100, Lives=🐔 0 coop / 12 wild",
     "Code files verified: foodBasket.js, chicken.js, hero.js, game.js",
     "Game runs without errors",
     "Visual verification via screenshots"

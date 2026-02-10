@@ -46,11 +46,10 @@ class Hero {
         // Trail for sprint
         this.sprintTrail = [];
 
-        // Chicken carrying
+        // Chicken carrying - supports up to 2 chickens
         this.carrying = {
-            isCarrying: false,
-            chickenId: null,
-            chicken: null  // Reference to chicken object
+            chickens: [],           // Array of chicken objects (max 2)
+            maxChickens: 2         // Configurable limit
         };
 
         // Interaction ranges
@@ -62,42 +61,87 @@ class Hero {
 
     // ==================== CHICKEN CARRYING ====================
 
+    canPickUpChicken() {
+        return this.carrying.chickens.length < this.carrying.maxChickens;
+    }
+
     pickUpChicken(chicken) {
-        if (this.carrying.isCarrying) return false;
+        if (!this.canPickUpChicken()) return false;
         if (!chicken.canBePickedUp()) return false;
 
-        this.carrying.isCarrying = true;
-        this.carrying.chickenId = chicken.id;
-        this.carrying.chicken = chicken;
-
+        this.carrying.chickens.push(chicken);
         chicken.pickUp();
         return true;
     }
 
     depositChicken(coop) {
-        if (!this.carrying.isCarrying || !this.carrying.chicken) return false;
+        if (this.carrying.chickens.length === 0) return false;
 
-        const chicken = this.carrying.chicken;
+        // Deposit the first chicken (could deposit all if needed)
+        const chicken = this.carrying.chickens[0];
         const deposited = chicken.depositIntoCoop(coop);
 
         if (deposited) {
             coop.chickens.push(chicken);
-            this.carrying.isCarrying = false;
-            this.carrying.chickenId = null;
-            this.carrying.chicken = null;
+            this.carrying.chickens.shift(); // Remove first chicken
             return true;
         }
 
         return false;
     }
 
-    getCarriedChickenPosition() {
-        // Position chicken above/beside player
-        const offsetX = this.facingDirection === 'right' ? 20 : -20;
-        return {
-            x: this.x + offsetX,
-            y: this.y - 15
-        };
+    depositAllChickens(coop) {
+        if (this.carrying.chickens.length === 0) return 0;
+
+        let depositedCount = 0;
+        // Iterate backwards to safely remove items while iterating
+        for (let i = this.carrying.chickens.length - 1; i >= 0; i--) {
+            const chicken = this.carrying.chickens[i];
+            const deposited = chicken.depositIntoCoop(coop);
+
+            if (deposited) {
+                coop.chickens.push(chicken);
+                this.carrying.chickens.splice(i, 1);
+                depositedCount++;
+            }
+        }
+
+        return depositedCount;
+    }
+
+    getCarriedChickenPosition(index) {
+        // Position chickens side-by-side (dual carry design)
+        if (this.carrying.chickens.length === 1) {
+            // Single chicken - right side
+            const offsetX = this.facingDirection === 'right' ? 20 : -20;
+            return {
+                x: this.x + offsetX,
+                y: this.y - 15
+            };
+        } else if (this.carrying.chickens.length === 2) {
+            // Two chickens - side by side
+            if (index === 0) {
+                // Left chicken
+                const offsetX = this.facingDirection === 'right' ? -14 : 14;
+                return {
+                    x: this.x + offsetX,
+                    y: this.y - 6
+                };
+            } else {
+                // Right chicken
+                const offsetX = this.facingDirection === 'right' ? 14 : -14;
+                return {
+                    x: this.x + offsetX,
+                    y: this.y - 10
+                };
+            }
+        }
+        return { x: this.x, y: this.y };
+    }
+
+    // Helper method to check if carrying chickens
+    isCarrying() {
+        return this.carrying.chickens.length > 0;
     }
     
     update(deltaTime, input, chickens, particleSystem) {
@@ -146,11 +190,17 @@ class Hero {
         // Update active spell effects
         this.updateSpellEffects(deltaTime, chickens);
 
-        // Update carried chicken position
-        if (this.carrying.isCarrying && this.carrying.chicken) {
-            const pos = this.getCarriedChickenPosition();
-            this.carrying.chicken.x = pos.x;
-            this.carrying.chicken.y = pos.y;
+        // Update carried chicken positions with bobbing animation
+        for (let i = 0; i < this.carrying.chickens.length; i++) {
+            const chicken = this.carrying.chickens[i];
+            const pos = this.getCarriedChickenPosition(i);
+
+            // Add bobbing animation - opposite phase for each chicken (seesaw effect)
+            const bobPhase = i === 0 ? 0 : Math.PI; // 180° offset
+            const bobOffset = Math.sin((this.time * 4) + bobPhase) * 2;
+
+            chicken.x = pos.x;
+            chicken.y = pos.y + bobOffset;
         }
     }
 
@@ -473,17 +523,52 @@ class Hero {
     }
     
     drawCarriedChicken(ctx) {
-        if (!this.carrying.isCarrying || !this.carrying.chicken) return;
+        if (this.carrying.chickens.length === 0) return;
 
-        // Draw the carried chicken (it updates its position in update())
-        this.carrying.chicken.draw(ctx);
+        // Draw each carried chicken
+        for (let i = 0; i < this.carrying.chickens.length; i++) {
+            const chicken = this.carrying.chickens[i];
+            chicken.draw(ctx);
 
-        // Draw carrying indicator
+            // Draw carrying indicator
+            ctx.save();
+            ctx.fillStyle = '#3498db';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('👋', chicken.x, chicken.y - 25);
+            ctx.restore();
+        }
+
+        // Draw capacity indicator when carrying chickens
+        this.drawCapacityIndicator(ctx);
+    }
+
+    drawCapacityIndicator(ctx) {
+        const count = this.carrying.chickens.length;
+        const max = this.carrying.maxChickens;
+
+        // Show indicator above hero's head
+        const indicatorX = this.x;
+        const indicatorY = this.y - 50;
+
         ctx.save();
-        ctx.fillStyle = '#3498db';
-        ctx.font = '10px sans-serif';
+        ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('👋', this.carrying.chicken.x, this.carrying.chicken.y - 25);
+
+        // Draw chicken silhouettes
+        for (let i = 0; i < max; i++) {
+            const x = indicatorX + (i - (max - 1) / 2) * 14;
+            if (i < count) {
+                // Filled chicken (carrying)
+                ctx.fillStyle = '#ffd700';
+                ctx.fillText('🐔', x, indicatorY);
+            } else {
+                // Empty slot (outline)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillText('○', x, indicatorY);
+            }
+        }
+
         ctx.restore();
     }
 

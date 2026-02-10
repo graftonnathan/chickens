@@ -6,7 +6,7 @@
     "egg-test-final.png"
   ],
   "observations": [
-    "Initial state: Score=0/50, Lives=3",
+    "Initial state: Score=🥚 0/100, Lives=🐔 0 coop / 12 wild",
     "Code files verified: egg.js, basket.js, hero.js, coop.js, game.js, index.html",
     "Game runs without errors",
     "Visual verification via screenshots required"

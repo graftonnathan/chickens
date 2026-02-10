@@ -122,8 +122,8 @@ class Game {
     checkProximityInteractions() {
         const hero = this.hero;
 
-        // 1. Auto-pickup wild chickens
-        if (!hero.carrying.isCarrying) {
+        // 1. Auto-pickup wild chickens (supports dual collection up to max)
+        if (hero.canPickUpChicken()) {
             for (const chicken of this.wildChickens) {
                 if (chicken.state === 'wild') {
                     const dist = Math.hypot(chicken.x - hero.x, chicken.y - hero.y);
@@ -136,21 +136,22 @@ class Game {
                             const idx = this.wildChickens.indexOf(chicken);
                             if (idx > -1) this.wildChickens.splice(idx, 1);
                         }
-                        break; // Only pick up one at a time
+                        // Continue loop to potentially pick up 2nd chicken if space available
+                        if (!hero.canPickUpChicken()) break;
                     }
                 }
             }
         }
 
-        // 2. Auto-deposit to coop
-        if (hero.carrying.isCarrying && hero.carrying.chicken) {
+        // 2. Auto-deposit to coop (deposit all carried chickens)
+        if (hero.isCarrying()) {
             const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
             if (distToCoop < hero.ranges.depositRadius && this.coop.chickens.length < this.coop.maxChickens) {
-                const chicken = hero.carrying.chicken;  // Cache before deposit clears it
-                const deposited = hero.depositChicken(this.coop);
-                if (deposited && chicken) {  // Use cached reference with null guard
-                    this.addBonusText(chicken.x, chicken.y - 30, '+DEPOSITED');
-                    this.particles.spawn(chicken.x, chicken.y, 'poof', 10);
+                // Deposit all chickens (will deposit as many as coop can hold)
+                const depositedCount = hero.depositAllChickens(this.coop);
+                if (depositedCount > 0) {
+                    this.addBonusText(hero.x, hero.y - 30, `+${depositedCount} DEPOSITED`);
+                    this.particles.spawn(hero.x, hero.y, 'poof', 10 * depositedCount);
                 }
             }
         }
@@ -700,8 +701,8 @@ class Game {
 
         const hero = this.hero;
 
-        // Pickup hint - when near wild chicken and not carrying
-        if (!hero.carrying.isCarrying) {
+        // Pickup hint - when near wild chicken and not at max capacity
+        if (hero.canPickUpChicken()) {
             for (const chicken of this.wildChickens) {
                 if (chicken.state === 'wild') {
                     const dist = Math.hypot(chicken.x - hero.x, chicken.y - hero.y);
@@ -728,7 +729,7 @@ class Game {
         }
 
         // Deposit hint - when carrying and near coop
-        if (hero.carrying.isCarrying) {
+        if (hero.isCarrying()) {
             const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
             if (distToCoop < hero.ranges.depositRadius) {
                 this.ctx.save();
