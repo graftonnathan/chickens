@@ -38,6 +38,9 @@ class Game {
         // Egg collection basket at house
         this.basketItem = new BasketItem();
         
+        // House deposit zone for egg delivery
+        this.houseDepositZone = new HouseDepositZone();
+        
         // Bonus text animations
         this.bonusTexts = [];
         
