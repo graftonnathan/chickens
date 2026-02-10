@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-09T14:05:48.746Z",
+  "timestamp": "2026-02-10T21:15:24.593Z",
   "ticket": "TICKET-1770640642904-chickens",
   "project": "chickens",
   "tester": "dummy",
@@ -27,13 +27,13 @@
     {
       "step": 5,
       "name": "Wizard features implemented",
-      "status": "pass",
+      "status": "fail",
       "details": {
-        "robe": true,
-        "hat": true,
-        "staff": true,
-        "beard": true,
-        "glow": true,
+        "robe": false,
+        "hat": false,
+        "staff": false,
+        "beard": false,
+        "glow": false,
         "sparkles": true
       }
     },
@@ -49,7 +49,7 @@
       "details": {
         "bobAnimation": true,
         "sway": false,
-        "trailTimer": true
+        "trailTimer": false
       }
     }
   ],
@@ -60,11 +60,11 @@
     "/home/molten/.openclaw/workspace/PROJECTS/chickens/screenshots/wizard-test-04-particles.png",
     "/home/molten/.openclaw/workspace/PROJECTS/chickens/screenshots/wizard-test-05-catch.png"
   ],
-  "success": true,
+  "success": false,
   "summary": {
     "total": 7,
-    "passed": 7,
-    "failed": 0,
-    "successRate": "100%"
+    "passed": 6,
+    "failed": 1,
+    "successRate": "86%"
   }
 }

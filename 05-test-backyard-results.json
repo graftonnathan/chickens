@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-09T14:09:54.507Z",
+  "timestamp": "2026-02-10T21:15:37.230Z",
   "ticket": "TICKET-1770640678846-chickens",
   "project": "chickens",
   "tester": "dummy",
@@ -17,9 +17,9 @@
         "sky": true,
         "house": true,
         "lawn": true,
-        "patio": true,
+        "patio": false,
         "fence": true,
-        "hedge": true,
+        "hedge": false,
         "gnome": true,
         "flamingo": true,
         "grill": false,
@@ -34,9 +34,9 @@
     {
       "step": 4,
       "name": "House has sliding door",
-      "status": "pass",
+      "status": "fail",
       "details": {
-        "hasSlidingDoor": true
+        "hasSlidingDoor": false
       }
     },
     {
@@ -52,7 +52,7 @@
       "name": "Garden shed has details",
       "status": "pass",
       "details": {
-        "tools": true,
+        "tools": false,
         "flowerBed": true
       }
     },
@@ -62,7 +62,7 @@
       "status": "fail",
       "details": {
         "table": false,
-        "chairs": true
+        "chairs": false
       }
     },
     {
@@ -79,8 +79,8 @@
   "success": false,
   "summary": {
     "total": 8,
-    "passed": 7,
-    "failed": 1,
-    "successRate": "88%"
+    "passed": 6,
+    "failed": 2,
+    "successRate": "75%"
   }
 }

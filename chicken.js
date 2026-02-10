@@ -1,39 +1,99 @@
 /**
- * Chicken class - Egg laying coop chicken with hunger system and escape mechanic
+ * Chicken class - Egg laying coop chicken with automatic interactions
+ * and prerequisite-based egg laying system
  */
+
+// Chicken type templates with attributes
+const CHICKEN_TYPE_TEMPLATES = {
+    common: {
+        minCoopTime: 30,           // Seconds in coop before eligible to lay
+        foodThreshold: 50,          // Minimum hunger % to lay egg
+        escapeTimer: 45,            // Seconds egg sits before escape
+        hungerDecayRate: 2,         // Hunger lost per second
+        eggValue: 10,
+        color: '#ffffff',
+        icon: '🐔',
+        label: 'Common'
+    },
+    fast: {
+        minCoopTime: 15,           // Lays quickly
+        foodThreshold: 60,
+        escapeTimer: 20,            // Escapes fast
+        hungerDecayRate: 4,         // Hungry often
+        eggValue: 15,
+        color: '#d2691e',
+        icon: '🏃',
+        label: 'Fast'
+    },
+    slow: {
+        minCoopTime: 60,           // Takes time
+        foodThreshold: 40,
+        escapeTimer: 60,            // But stays put
+        hungerDecayRate: 1,
+        eggValue: 20,
+        color: '#808080',
+        icon: '🐢',
+        label: 'Slow'
+    },
+    rare: {
+        minCoopTime: 90,           // Very long
+        foodThreshold: 80,          // Very hungry
+        escapeTimer: 10,            // Very fast escape
+        hungerDecayRate: 5,
+        eggValue: 50,
+        color: '#ffd700',
+        icon: '💎',
+        label: 'Rare'
+    },
+    stubborn: {
+        minCoopTime: 30,
+        foodThreshold: 50,
+        escapeTimer: 90,            // Very patient
+        hungerDecayRate: 2,
+        eggValue: 12,
+        color: '#2c2c2c',
+        icon: '🛡️',
+        label: 'Stubborn'
+    }
+};
+
 class Chicken {
-    constructor(id, x, y) {
+    constructor(id, x, y, type = null) {
         this.id = id;
         this.x = x;
         this.y = y;
         this.radius = 15;
 
-        // Chicken type (affects escape timer)
-        this.chickenType = ['common', 'rare', 'golden'][Math.floor(Math.random() * 3)];
+        // Chicken type - random if not specified
+        const types = Object.keys(CHICKEN_TYPE_TEMPLATES);
+        this.chickenType = type || types[Math.floor(Math.random() * types.length)];
+        this.attributes = CHICKEN_TYPE_TEMPLATES[this.chickenType];
 
-        // State
-        this.inCoop = true;           // In coop or escaped/roaming
-        this.hasEgg = false;          // Has egg ready to collect
-        this.hunger = 100;            // 0-100%
+        // State machine
+        this.state = 'wild';        // wild, carried, in_coop, eligible_to_lay, laying, egg_waiting, escaping
+        this.previousState = null;
+
+        // Coop residency tracking
+        this.coopResidency = {
+            inCoop: false,
+            coopId: null,
+            entryTime: null,        // Timestamp when entered
+            accumulatedTime: 0      // Total seconds accumulated
+        };
+
+        // Hunger system
+        this.hunger = 100;          // 0-100%
+
+        // Egg laying
+        this.hasEgg = false;
+        this.eggsLaid = 0;
+
+        // Escape tracking
+        this.escapeTimerStart = null;
+        this.escapeWarningTriggered = false;
 
         // Timers
-        this.eggTimer = 0;            // Time until next egg
-        this.hungerDecayRate = 0.5;   // 0.5% per second
         this.animTimer = 0;
-
-        // Escape mechanic
-        this.escapeTimer = 0;         // Time until escape if egg ignored
-        this.escapeThresholds = {
-            common: 45,   // 45 seconds
-            rare: 30,     // 30 seconds
-            golden: 20    // 20 seconds
-        };
-        this.isEscaping = false;      // Currently escaping state
-        this.eggsLaid = 0;            // Track lifetime eggs
-
-        // Visual
-        this.color = this.getTypeColor();
-        this.state = 'idle';          // idle, moving, eating, laying, escaping, escaped
 
         // Movement
         this.targetX = x;
@@ -41,25 +101,15 @@ class Chicken {
         this.moveSpeed = 30;
         this.baseMoveSpeed = 30;
 
-        // Fleeing
-        this.isFleeing = false;
-        this.fleeTargetY = 600; // House direction
-
         // Frozen by spell
         this.isFrozen = false;
         this.frozenTimer = 0;
-    }
 
-    getTypeColor() {
-        switch(this.chickenType) {
-            case 'golden': return '#ffd700';
-            case 'rare': return '#87ceeb';
-            case 'common':
-            default: return ['#fff', '#ffeb3b', '#ff9800'][Math.floor(Math.random() * 3)];
-        }
+        // Wandering angle for wild chickens
+        this.wanderAngle = Math.random() * Math.PI * 2;
     }
     
-    update(deltaTime, coop) {
+    update(deltaTime, coop, gameTime) {
         this.animTimer += deltaTime;
 
         // Handle frozen state
@@ -68,82 +118,168 @@ class Chicken {
             if (this.frozenTimer <= 0) {
                 this.isFrozen = false;
             }
-            return null; // Don't update when frozen
+            return null;
         }
 
-        // Update hunger
-        this.hunger -= this.hungerDecayRate * deltaTime;
-        this.hunger = Math.max(0, this.hunger);
-
-        // Update escape timer if egg not collected
-        if (this.hasEgg && !this.isEscaping) {
-            this.escapeTimer -= deltaTime;
-            if (this.escapeTimer <= 0) {
-                this.startEscape(coop);
-            }
-        }
-
-        if (this.inCoop) {
-            this.updateInCoop(deltaTime, coop);
-        } else {
-            return this.updateOutOfCoop(deltaTime);
+        // State machine update
+        switch(this.state) {
+            case 'wild':
+                return this.updateWild(deltaTime);
+            case 'carried':
+                return this.updateCarried(deltaTime);
+            case 'in_coop':
+                return this.updateInCoop(deltaTime, coop, gameTime);
+            case 'eligible_to_lay':
+                return this.updateEligibleToLay(deltaTime, coop);
+            case 'laying':
+                // Laying is handled by animation timer
+                return null;
+            case 'egg_waiting':
+                return this.updateEggWaiting(deltaTime, coop);
+            case 'escaping':
+                return this.updateEscaping(deltaTime, coop);
         }
 
         return null;
     }
 
-    updateInCoop(deltaTime, coop) {
-        // Check if escaping - move to escape gap
-        if (this.isEscaping) {
-            this.updateEscaping(deltaTime, coop);
-            return;
+    updateWild(deltaTime) {
+        // Wandering behavior for wild chickens
+        if (Math.random() < 0.01) {
+            this.wanderAngle += (Math.random() - 0.5) * Math.PI;
         }
 
-        // Check if should leave coop (starving, overcrowded, or spooked)
-        if (this.hunger === 0 || coop.isOvercrowded() || coop.wasSpooked) {
-            this.leaveCoop();
-            return;
+        const speed = 20;
+        this.x += Math.cos(this.wanderAngle) * speed * deltaTime;
+        this.y += Math.sin(this.wanderAngle) * speed * deltaTime;
+
+        // Keep in bounds
+        this.x = Math.max(50, Math.min(750, this.x));
+        this.y = Math.max(200, Math.min(550, this.y));
+
+        // Reset angle if hitting bounds
+        if (this.x <= 50 || this.x >= 750 || this.y <= 200 || this.y >= 550) {
+            this.wanderAngle += Math.PI;
         }
 
-        // Try to lay egg
-        if (!this.hasEgg && !this.isEscaping) {
-            const eggInterval = this.getEggInterval();
-            this.eggTimer += deltaTime * 1000; // Convert to ms
+        return null;
+    }
 
-            if (this.eggTimer >= eggInterval) {
-                this.layEgg();
+    updateCarried(deltaTime) {
+        // Position follows player - handled by game/hero
+        return null;
+    }
+
+    updateInCoop(deltaTime, coop, gameTime) {
+        // Decay hunger
+        this.hunger -= this.attributes.hungerDecayRate * deltaTime;
+        this.hunger = Math.max(0, this.hunger);
+
+        // Check if enough time accumulated
+        if (this.coopResidency.entryTime) {
+            const now = gameTime || Date.now() / 1000;
+            const timeInCoop = now - this.coopResidency.entryTime;
+
+            if (timeInCoop >= this.attributes.minCoopTime) {
+                this.state = 'eligible_to_lay';
             }
         }
 
-        // Idle movement in coop (small random movements)
+        // Idle movement in coop
         this.updateIdleMovement(deltaTime);
+        return null;
     }
 
-    startEscape(coop) {
-        this.isEscaping = true;
-        this.state = 'escaping';
+    updateEligibleToLay(deltaTime, coop) {
+        // Continue hunger decay
+        this.hunger -= this.attributes.hungerDecayRate * deltaTime;
+        this.hunger = Math.max(0, this.hunger);
 
-        // Find target: chicken escape gap on south side
-        const escapeAngle = (coop.chickenGapStart + coop.chickenGapEnd) / 2;
-        this.escapeTargetX = coop.x + Math.cos(escapeAngle) * coop.fenceRadius;
-        this.escapeTargetY = coop.y + Math.sin(escapeAngle) * coop.fenceRadius;
+        // Check if can lay egg
+        if (this.hunger >= this.attributes.foodThreshold) {
+            this.startLaying();
+        }
+
+        this.updateIdleMovement(deltaTime);
+        return null;
+    }
+
+    startLaying() {
+        this.state = 'laying';
+
+        // Animation delay then lay egg
+        setTimeout(() => {
+            if (this.state === 'laying') {
+                this.layEgg();
+            }
+        }, 2000); // 2 second lay animation
+    }
+
+    updateEggWaiting(deltaTime, coop) {
+        if (this.escapeTimerStart) {
+            const now = Date.now() / 1000;
+            const elapsed = now - this.escapeTimerStart;
+            const remaining = this.attributes.escapeTimer - elapsed;
+
+            // Warning at 5 seconds left
+            if (remaining <= 5 && !this.escapeWarningTriggered) {
+                this.escapeWarningTriggered = true;
+            }
+
+            // Escape!
+            if (remaining <= 0) {
+                this.state = 'escaping';
+            }
+        }
+
+        this.updateIdleMovement(deltaTime);
+        return null;
     }
 
     updateEscaping(deltaTime, coop) {
-        // Move toward escape gap
-        const dx = this.escapeTargetX - this.x;
-        const dy = this.escapeTargetY - this.y;
+        // Move toward chicken escape gap
+        const escapeAngle = (coop.chickenGapStart + coop.chickenGapEnd) / 2;
+        const exitX = coop.x + Math.cos(escapeAngle) * coop.fenceRadius;
+        const exitY = coop.y + Math.sin(escapeAngle) * coop.fenceRadius;
+
+        const dx = exitX - this.x;
+        const dy = exitY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > 5) {
-            // Running faster when escaping
-            const escapeSpeed = this.baseMoveSpeed * 1.5;
+            const escapeSpeed = this.baseMoveSpeed * 2;
             this.x += (dx / dist) * escapeSpeed * deltaTime;
             this.y += (dy / dist) * escapeSpeed * deltaTime;
         } else {
-            // Reached escape gap - exit coop
-            this.leaveCoop();
+            // Reached exit - complete escape
+            return this.completeEscape(coop);
         }
+
+        return null;
+    }
+
+    completeEscape(coop) {
+        // Remove from coop
+        if (coop && coop.chickens) {
+            const idx = coop.chickens.indexOf(this);
+            if (idx > -1) coop.chickens.splice(idx, 1);
+        }
+
+        // Reset to wild state
+        this.state = 'wild';
+        this.coopResidency.inCoop = false;
+        this.coopResidency.coopId = null;
+        this.coopResidency.entryTime = null;
+        this.hasEgg = false;
+        this.escapeTimerStart = null;
+        this.escapeWarningTriggered = false;
+
+        // Place outside coop
+        const escapeAngle = (coop.chickenGapStart + coop.chickenGapEnd) / 2;
+        this.x = coop.x + Math.cos(escapeAngle) * (coop.fenceRadius + 40);
+        this.y = coop.y + Math.sin(escapeAngle) * (coop.fenceRadius + 40);
+
+        return 'escaped';
     }
     
     updateIdleMovement(deltaTime) {
@@ -201,63 +337,73 @@ class Chicken {
     
     layEgg() {
         this.hasEgg = true;
-        this.eggTimer = 0;
         this.eggsLaid++;
-        this.state = 'laying';
-
-        // Start escape timer based on chicken type
-        this.escapeTimer = this.escapeThresholds[this.chickenType] || 45;
-
-        // Brief laying animation
-        setTimeout(() => { if (this.state === 'laying') this.state = 'idle'; }, 500);
+        this.state = 'egg_waiting';
+        this.escapeTimerStart = Date.now() / 1000;
+        this.escapeWarningTriggered = false;
     }
 
     collectEgg() {
         if (this.hasEgg) {
             this.hasEgg = false;
-            this.eggTimer = 0;
-            this.escapeTimer = 0;
-            this.isEscaping = false;
-            if (this.state === 'escaping') {
-                this.state = 'idle';
-            }
+            this.escapeTimerStart = null;
+            this.escapeWarningTriggered = false;
+
+            // Reset to in_coop state - needs to accumulate time again
+            this.state = 'in_coop';
+            this.coopResidency.entryTime = Date.now() / 1000;
+
             return true;
         }
         return false;
     }
     
     feed() {
-        this.hunger = 100;
-        this.state = 'eating';
-        setTimeout(() => { if (this.state === 'eating') this.state = 'idle'; }, 1000);
-    }
-    
-    leaveCoop() {
-        this.inCoop = false;
-        this.isFleeing = true;
-        this.isEscaping = false;
-        this.state = 'escaped';
-        // Push to just outside coop fence
-        this.y += 60;
+        this.hunger = Math.min(100, this.hunger + 30);
     }
 
-    returnToCoop(coop) {
-        this.inCoop = true;
-        this.isFleeing = false;
-        this.isEscaping = false;
-        this.state = 'idle';
-        // Random position inside coop
+    // Pick up this chicken (called when player walks near)
+    pickUp() {
+        if (this.state !== 'wild' && this.state !== 'in_coop' &&
+            this.state !== 'eligible_to_lay' && this.state !== 'egg_waiting') {
+            return false;
+        }
+
+        this.previousState = this.state;
+        this.state = 'carried';
+        this.coopResidency.inCoop = false;
+        // Note: accumulated time is preserved in entryTime
+        return true;
+    }
+
+    // Deposit this chicken into coop
+    depositIntoCoop(coop) {
+        if (this.state !== 'carried') return false;
+
+        this.state = 'in_coop';
+        this.coopResidency.inCoop = true;
+        this.coopResidency.coopId = coop.id || 'main';
+        this.coopResidency.entryTime = Date.now() / 1000;
+
+        // Position in coop
         const angle = Math.random() * Math.PI * 2;
-        const dist = 15 + Math.random() * 35;
+        const dist = 15 + Math.random() * (coop.fenceRadius - 30);
         this.x = coop.x + Math.cos(angle) * dist;
         this.y = coop.y + Math.sin(angle) * dist;
+
+        return true;
     }
 
-    // Check if player can catch this chicken
+    // Check if player can pick up this chicken
+    canBePickedUp() {
+        return this.state === 'wild';
+    }
+
+    // Check if player can catch this chicken (escaped wild chickens)
     canBeCaught(hero) {
-        if (this.inCoop || this.state !== 'escaped') return false;
+        if (this.state !== 'wild') return false;
         const dist = Math.hypot(this.x - hero.x, this.y - hero.y);
-        return dist < 40; // Catch range
+        return dist < 40;
     }
     
     draw(ctx) {
@@ -272,6 +418,9 @@ class Chicken {
         // Draw chicken body
         this.drawBody(ctx);
 
+        // Draw state badge
+        this.drawStateBadge(ctx);
+
         // Draw egg indicator if has egg
         if (this.hasEgg) {
             this.drawEggIndicator(ctx);
@@ -280,32 +429,25 @@ class Chicken {
         // Draw hunger indicator
         this.drawHungerIndicator(ctx);
 
-        // Draw escape timer bar if egg not collected
-        if (this.hasEgg && !this.isEscaping) {
+        // Draw residency timer bar (if in coop building up time)
+        if (this.state === 'in_coop' && this.coopResidency.entryTime) {
+            this.drawResidencyTimer(ctx);
+        }
+
+        // Draw escape timer bar if egg waiting
+        if (this.state === 'egg_waiting') {
             this.drawEscapeTimer(ctx);
         }
 
-        // Draw escaping indicator
-        if (this.isEscaping) {
-            this.drawEscapingIndicator(ctx);
-        }
-
-        // Draw fleeing indicator
-        if (this.isFleeing) {
-            this.drawFleeingIndicator(ctx);
-        }
-
-        // Draw type indicator for rare/golden
-        if (this.chickenType !== 'common') {
-            this.drawTypeIndicator(ctx);
-        }
+        // Draw type indicator
+        this.drawTypeIndicator(ctx);
 
         ctx.restore();
     }
     
     drawBody(ctx) {
         const hungerState = this.getHungerState();
-        
+
         // Apply visual filters based on hunger
         switch(hungerState) {
             case 'full':
@@ -322,31 +464,34 @@ class Chicken {
                 ctx.filter = 'brightness(0.5) grayscale(0.6)';
                 break;
         }
-        
+
+        // Use chicken type color
+        const bodyColor = this.attributes ? this.attributes.color : '#ffffff';
+
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.beginPath();
         ctx.ellipse(this.x, this.y + 10, 12, 4, 0, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Body
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = bodyColor;
         ctx.beginPath();
         ctx.ellipse(this.x, this.y, 12, 10, 0, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Wing
-        ctx.fillStyle = this.color === '#fff' ? '#f5f5f5' : this.color;
+        ctx.fillStyle = bodyColor === '#ffffff' ? '#f5f5f5' : bodyColor;
         ctx.beginPath();
         ctx.ellipse(this.x - 5, this.y, 8, 5, 0, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Head
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = bodyColor;
         ctx.beginPath();
         ctx.arc(this.x, this.y - 8, 7, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Beak
         ctx.fillStyle = '#ffa500';
         ctx.beginPath();
@@ -355,19 +500,19 @@ class Chicken {
         ctx.lineTo(this.x + 5, this.y - 4);
         ctx.closePath();
         ctx.fill();
-        
+
         // Eye
         ctx.fillStyle = '#000000';
         ctx.beginPath();
         ctx.arc(this.x + 3, this.y - 9, 2, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Comb (red thing on head)
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
         ctx.arc(this.x, this.y - 15, 4, Math.PI, 0);
         ctx.fill();
-        
+
         // Legs
         ctx.strokeStyle = '#ffa500';
         ctx.lineWidth = 2;
@@ -377,7 +522,7 @@ class Chicken {
         ctx.moveTo(this.x + 5, this.y + 8);
         ctx.lineTo(this.x + 5, this.y + 15);
         ctx.stroke();
-        
+
         ctx.restore(); // Restore filter
     }
     
@@ -420,21 +565,65 @@ class Chicken {
         ctx.fillRect(this.x - barWidth/2, this.y + yOffset, barWidth * (this.hunger/100), barHeight);
     }
     
-    drawFleeingIndicator(ctx) {
-        // Red exclamation
-        ctx.fillStyle = '#f44336';
-        ctx.font = 'bold 14px sans-serif';
+    drawStateBadge(ctx) {
+        // State badge above chicken
+        const stateConfig = {
+            'wild': { text: '🌿 WILD', color: '#95a5a6' },
+            'carried': { text: '👋 CARRY', color: '#3498db' },
+            'in_coop': { text: '🏠 COOP', color: '#2ecc71' },
+            'eligible_to_lay': { text: '⏳ WAITING', color: '#f1c40f' },
+            'laying': { text: '🥚 LAYING', color: '#ffd700' },
+            'egg_waiting': { text: '⚠️ EGG', color: '#ff9800' },
+            'escaping': { text: '🏃 ESCAPE', color: '#e74c3c' }
+        };
+
+        const config = stateConfig[this.state];
+        if (!config) return;
+
+        ctx.save();
+        ctx.fillStyle = config.color;
+        ctx.font = 'bold 9px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('!', this.x, this.y - 45);
+        ctx.shadowBlur = 2;
+        ctx.shadowColor = '#000';
+        ctx.fillText(config.text, this.x, this.y - 35);
+        ctx.restore();
+    }
+
+    drawResidencyTimer(ctx) {
+        // Show progress toward egg-laying eligibility
+        const barWidth = 30;
+        const barHeight = 3;
+        const yOffset = -45;
+
+        const now = Date.now() / 1000;
+        const elapsed = this.coopResidency.entryTime ? now - this.coopResidency.entryTime : 0;
+        const required = this.attributes.minCoopTime;
+        const percent = Math.min(1, elapsed / required);
+
+        // Background
+        ctx.fillStyle = '#333';
+        ctx.fillRect(this.x - barWidth/2, this.y + yOffset, barWidth, barHeight);
+
+        // Fill gradient
+        if (percent >= 1) {
+            ctx.fillStyle = '#2ecc71';
+        } else {
+            ctx.fillStyle = '#f1c40f';
+        }
+
+        ctx.fillRect(this.x - barWidth/2, this.y + yOffset, barWidth * percent, barHeight);
     }
 
     drawEscapeTimer(ctx) {
-        const barWidth = 20;
+        const barWidth = 30;
         const barHeight = 3;
-        const yOffset = -42;
+        const yOffset = -45;
 
-        const threshold = this.escapeThresholds[this.chickenType] || 45;
-        const percent = this.escapeTimer / threshold;
+        const now = Date.now() / 1000;
+        const elapsed = this.escapeTimerStart ? now - this.escapeTimerStart : 0;
+        const remaining = Math.max(0, this.attributes.escapeTimer - elapsed);
+        const percent = remaining / this.attributes.escapeTimer;
 
         // Background
         ctx.fillStyle = '#333';
@@ -448,7 +637,7 @@ class Chicken {
         ctx.fillRect(this.x - barWidth/2, this.y + yOffset, barWidth * percent, barHeight);
 
         // Warning indicator when low
-        if (percent < 0.25) {
+        if (percent < 0.25 || this.escapeWarningTriggered) {
             ctx.fillStyle = '#e74c3c';
             ctx.font = 'bold 10px sans-serif';
             ctx.textAlign = 'center';
@@ -456,33 +645,13 @@ class Chicken {
         }
     }
 
-    drawEscapingIndicator(ctx) {
-        // Red ESCAPING text
-        ctx.fillStyle = '#e74c3c';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.shadowBlur = 4;
-        ctx.shadowColor = '#000';
-        ctx.fillText('ESCAPING!', this.x, this.y - 40);
-        ctx.shadowBlur = 0;
-
-        // Running animation indicator
-        const bounce = Math.sin(this.animTimer * 15) * 3;
-        ctx.fillStyle = '#e74c3c';
-        ctx.font = '12px sans-serif';
-        ctx.fillText('🏃', this.x + 18, this.y - 10 + bounce);
-    }
-
     drawTypeIndicator(ctx) {
-        // Draw type badge
-        const icon = this.chickenType === 'golden' ? '👑' :
-                     this.chickenType === 'rare' ? '💎' : '';
+        // Draw type icon
+        const icon = this.attributes ? this.attributes.icon : '🐔';
 
-        if (icon) {
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(icon, this.x + 12, this.y - 18);
-        }
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(icon, this.x + 14, this.y - 20);
     }
 
     getHungerState() {

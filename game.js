@@ -85,23 +85,76 @@ class Game {
         this.eggsCollected = 0;
         this.escapedChickens = 0;
         this.bonusTexts = [];
-        
-        this.hero = new Hero(400, 350);
+
+        this.hero = new Hero(400, 500); // Start near house
         this.coop = new Coop(400, 80);
-        
-        // Spawn 12 unique typed chickens
-        this.chickenManager = new ChickenManager(this.coop);
-        this.chickenManager.spawnChickens();
-        
+
+        // Spawn wild chickens in the field (not in coop)
+        this.wildChickens = this.spawnWildChickens();
+
         this.raccoons = [];
         this.raccoonSpawner.reset();
         this.particles = new ParticleSystem();
-        
+
         this.fenceHoleManager.reset();
         this.toolManager.reset();
-        
+
         this.updateUI();
         this.hideOverlays();
+    }
+
+    spawnWildChickens() {
+        const chickens = [];
+        const types = Object.keys(CHICKEN_TYPE_TEMPLATES);
+
+        for (let i = 0; i < this.maxChickens; i++) {
+            // Spawn chickens in the field (between house and coop)
+            const x = 100 + Math.random() * 600;
+            const y = 250 + Math.random() * 200;
+
+            const chicken = new Chicken(i, x, y, types[i % types.length]);
+            chickens.push(chicken);
+        }
+
+        return chickens;
+    }
+
+    checkProximityInteractions() {
+        const hero = this.hero;
+
+        // 1. Auto-pickup wild chickens
+        if (!hero.carrying.isCarrying) {
+            for (const chicken of this.wildChickens) {
+                if (chicken.state === 'wild') {
+                    const dist = Math.hypot(chicken.x - hero.x, chicken.y - hero.y);
+                    if (dist < hero.ranges.pickupRadius) {
+                        const pickedUp = hero.pickUpChicken(chicken);
+                        if (pickedUp) {
+                            this.addBonusText(chicken.x, chicken.y - 30, '+PICKED UP');
+                            this.particles.spawn(chicken.x, chicken.y, 'sparkle', 8);
+                            // Remove from wild chickens
+                            const idx = this.wildChickens.indexOf(chicken);
+                            if (idx > -1) this.wildChickens.splice(idx, 1);
+                        }
+                        break; // Only pick up one at a time
+                    }
+                }
+            }
+        }
+
+        // 2. Auto-deposit to coop
+        if (hero.carrying.isCarrying && hero.carrying.chicken) {
+            const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
+            if (distToCoop < hero.ranges.depositRadius && this.coop.chickens.length < this.coop.maxChickens) {
+                const deposited = hero.depositChicken(this.coop);
+                if (deposited) {
+                    const chicken = hero.carrying.chicken;
+                    this.addBonusText(chicken.x, chicken.y - 30, '+DEPOSITED');
+                    this.particles.spawn(chicken.x, chicken.y, 'poof', 10);
+                }
+            }
+        }
+    }
     }
     
     gameWin() {
@@ -149,93 +202,107 @@ class Game {
     
     update(deltaTime) {
         if (this.state !== 'playing') return;
-        
+
         this.gameTime += deltaTime;
-        
+
         // Update hero
         this.hero.update(deltaTime, this.input, this.coop.chickens, this.particles);
-        
+
         // Fence collision
         const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
         if (!fenceResult.inCoop) {
             this.hero.x = fenceResult.x;
             this.hero.y = fenceResult.y;
         }
-        
-        // Update coop and chickens
-        const escapedChickens = this.chickenManager.update(deltaTime, this.coop, this.gameTime);
+
+        // Update wild chickens (wandering)
+        this.wildChickens.forEach(chicken => chicken.update(deltaTime, null, this.gameTime));
+
+        // Update coop chickens (with lifecycle)
+        const escapedChickens = this.coop.update(deltaTime, this.gameTime);
         if (escapedChickens.length > 0) {
             this.escapedChickens += escapedChickens.length;
-            // Particle effect for escape
+            // Add escaped chickens back to wild list
             escapedChickens.forEach(chicken => {
-                this.particles.spawn(chicken.x, 550, 'escape', 10);
+                this.wildChickens.push(chicken);
+                this.particles.spawn(chicken.x, chicken.y, 'escape', 10);
             });
         }
-        
+
+        // Automatic proximity interactions (pickup/deposit)
+        this.checkProximityInteractions();
+
         // Update tools
         this.toolManager.update(deltaTime);
-        
-        // Tool pickup
-        const availableTools = this.toolManager.checkPickups(this.hero);
-        for (const tool of availableTools) {
-            if (this.hero.pickUpTool(tool)) {
-                const toolName = tool.type === 'eggBasket' ? 'BASKET' : 
-                                tool.type === 'hammer' ? 'HAMMER' : 'FOOD';
-                this.addBonusText(this.hero.x, this.hero.y - 30, `+${toolName}`);
-                break;
+
+        // Tool pickup (manual with E)
+        if (this.input.isInteractPressed()) {
+            if (!this.hero.currentTool) {
+                const availableTools = this.toolManager.checkPickups(this.hero);
+                for (const tool of availableTools) {
+                    if (this.hero.pickUpTool(tool)) {
+                        const toolName = tool.type === 'eggBasket' ? '🧺 BASKET' :
+                                        tool.type === 'hammer' ? '🔨 HAMMER' : '🌾 FOOD';
+                        this.addBonusText(this.hero.x, this.hero.y - 30, `+${toolName}`);
+                        break;
+                    }
+                }
+            } else {
+                // Drop tool
+                const tool = this.hero.dropTool();
+                if (tool) {
+                    tool.x = this.hero.x;
+                    tool.y = this.hero.y;
+                    this.addBonusText(this.hero.x, this.hero.y - 30, 'DROPPED');
+                }
             }
         }
-        
-        // Check interactions inside coop
-        if (fenceResult.inCoop) {
+
+        // E key interactions inside coop
+        if (this.input.isInteractPressed()) {
             const eggBasket = this.hero.getTool('eggBasket');
             const foodBasket = this.hero.getTool('foodBasket');
-            
+
             // Egg collection - find nearby chickens with eggs
             if (eggBasket && eggBasket.canCollect()) {
-                const chickens = this.chickenManager.getChickensWithEggs();
                 let collected = 0;
-                
-                for (const chicken of chickens) {
-                    const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
-                    if (dist < 50 && eggBasket.canCollect()) {
-                        const result = chicken.collectEgg();
-                        if (result) {
-                            eggBasket.collectEgg();
-                            collected++;
-                            
-                            // Check for golden egg
-                            if (typeof result === 'object' && result.golden) {
-                                this.addBonusText(chicken.x, chicken.y - 40, '✨ GOLD!');
-                                this.score += 5; // Bonus points for golden egg
+
+                for (const chicken of this.coop.chickens) {
+                    if (chicken.hasEgg) {
+                        const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
+                        if (dist < 50 && eggBasket.canCollect()) {
+                            const result = chicken.collectEgg();
+                            if (result) {
+                                eggBasket.collectEgg();
+                                collected++;
+                                this.particles.spawn(chicken.x, chicken.y, 'sparkle', 5);
                             }
-                            
-                            this.particles.spawn(chicken.x, chicken.y, 'sparkle', 5);
                         }
                     }
                 }
-                
+
                 if (collected > 0) {
-                    this.addBonusText(this.hero.x, this.hero.y - 30, `+${collected} EGG${collected > 1 ? 'S' : ''}`);
+                    this.addBonusText(this.hero.x, this.hero.y - 30, `+${collected} 🥚`);
                 }
             }
-            
+
             // Feeding - find nearby hungry chickens
             if (foodBasket && foodBasket.usesRemaining > 0) {
-                const chickens = this.chickenManager.getHungryChickens();
                 let fed = 0;
-                
-                for (const chicken of chickens) {
-                    const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
-                    if (dist < 50 && foodBasket.usesRemaining > 0) {
-                        chicken.feed();
-                        foodBasket.use();
-                        fed++;
-                        this.addBonusText(chicken.x, chicken.y - 40, '❤');
-                        this.particles.spawn(chicken.x, chicken.y, 'heart', 3);
+
+                for (const chicken of this.coop.chickens) {
+                    if (chicken.hunger < 80) {
+                        const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
+                        if (dist < 50 && foodBasket.usesRemaining > 0) {
+                            chicken.feed();
+                            foodBasket.use();
+                            fed++;
+                            this.addBonusText(chicken.x, chicken.y - 40, '❤');
+                            this.particles.spawn(chicken.x, chicken.y, 'heart', 3);
+                        }
                     }
                 }
-                
+
                 if (foodBasket.isEmpty()) {
                     this.hero.dropTool('foodBasket');
                 }
@@ -373,43 +440,64 @@ class Game {
 
     updateChickenCards() {
         const container = document.getElementById('chickenCards');
-        if (!container || !this.chickenManager) return;
+        if (!container) return;
 
         // Clear existing cards
         container.innerHTML = '';
 
+        // Combine coop and wild chickens for display
+        const allChickens = [...this.coop.chickens, ...this.wildChickens];
+
         // Create card for each chicken
-        this.chickenManager.chickens.forEach((chicken, index) => {
+        allChickens.forEach((chicken, index) => {
             const card = document.createElement('div');
             card.className = 'chicken-card';
 
             // Add state classes
-            if (!chicken.inCoop) card.classList.add('escaped');
-            if (chicken.isEscaping) card.classList.add('escaping');
+            if (chicken.state === 'wild') card.classList.add('state-wild');
+            if (chicken.state === 'escaping') card.classList.add('escaping');
+            if (chicken.state === 'egg_waiting') card.classList.add('state-egg');
 
             // Type icon
-            const typeIcon = chicken.chickenType === 'golden' ? '👑' :
-                            chicken.chickenType === 'rare' ? '💎' : '🐔';
+            const typeIcon = chicken.attributes ? chicken.attributes.icon : '🐔';
+            const typeLabel = chicken.attributes ? chicken.attributes.label : 'Common';
 
             // Hunger hearts
             const hearts = Math.ceil(chicken.hunger / 20);
             const hungerDisplay = '❤'.repeat(hearts) + '○'.repeat(5 - hearts);
 
+            // Residency timer (if in coop building up time)
+            let residencyHtml = '';
+            if (chicken.state === 'in_coop' && chicken.coopResidency.entryTime) {
+                const now = this.gameTime || Date.now() / 1000;
+                const elapsed = now - chicken.coopResidency.entryTime;
+                const required = chicken.attributes.minCoopTime;
+                const percent = Math.min(100, (elapsed / required) * 100);
+                residencyHtml = `<div class="chicken-card-progress"><div class="fill" style="width: ${percent}%"></div></div>`;
+            }
+
             // Escape timer bar
             let timerHtml = '';
-            if (chicken.hasEgg && !chicken.isEscaping) {
-                const threshold = chicken.escapeThresholds[chicken.chickenType] || 45;
-                const percent = (chicken.escapeTimer / threshold) * 100;
+            if (chicken.state === 'egg_waiting' && chicken.escapeTimerStart) {
+                const now = Date.now() / 1000;
+                const elapsed = now - chicken.escapeTimerStart;
+                const remaining = Math.max(0, chicken.attributes.escapeTimer - elapsed);
+                const percent = (remaining / chicken.attributes.escapeTimer) * 100;
                 const timerClass = percent > 50 ? 'safe' : percent > 25 ? 'warning' : 'danger';
                 timerHtml = `<div class="chicken-card-timer"><div class="fill ${timerClass}" style="width: ${percent}%"></div></div>`;
             }
 
             // Status icon
-            let statusIcon = '●'; // idle
-            if (chicken.isEscaping) statusIcon = '🏃';
-            else if (!chicken.inCoop) statusIcon = '❌';
-            else if (chicken.hasEgg) statusIcon = '🥚';
-            else if (chicken.hunger < 30) statusIcon = '🍽️';
+            const stateIcons = {
+                'wild': '🌿',
+                'carried': '👋',
+                'in_coop': '🏠',
+                'eligible_to_lay': '⏳',
+                'laying': '🥚',
+                'egg_waiting': '⚠️',
+                'escaping': '🏃'
+            };
+            const statusIcon = stateIcons[chicken.state] || '●';
 
             card.innerHTML = `
                 <div class="chicken-card-header">
@@ -423,6 +511,7 @@ class Game {
                         <div class="chicken-card-eggs">🥚 ${chicken.eggsLaid}</div>
                     </div>
                 </div>
+                ${residencyHtml}
                 ${timerHtml}
                 <div class="chicken-card-status">${statusIcon}</div>
             `;
@@ -459,27 +548,15 @@ class Game {
         let showPrompt = false;
         let actionText = 'INTERACT';
 
-        // Check for catchable chickens
-        const escapedChickens = this.chickenManager.chickens.filter(c => !c.inCoop && c.state === 'escaped');
-        for (const chicken of escapedChickens) {
-            if (chicken.canBeCaught(this.hero)) {
-                showPrompt = true;
-                actionText = 'CATCH CHICKEN';
-                break;
-            }
-        }
-
         // Check for tools
-        if (!showPrompt && !this.hero.currentTool) {
+        if (!this.hero.currentTool) {
             const availableTools = this.toolManager.checkPickups(this.hero);
             if (availableTools.length > 0) {
                 showPrompt = true;
                 actionText = 'PICK UP TOOL';
             }
-        }
-
-        // Check for droppable tool
-        if (!showPrompt && this.hero.currentTool) {
+        } else {
+            // Can drop tool
             showPrompt = true;
             actionText = 'DROP TOOL';
         }
@@ -490,13 +567,14 @@ class Game {
             if (fenceResult.inCoop || fenceResult.inGap) {
                 const eggBasket = this.hero.getTool('eggBasket');
                 if (eggBasket && eggBasket.canCollect()) {
-                    const chickens = this.chickenManager.getChickensWithEggs();
-                    for (const chicken of chickens) {
-                        const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
-                        if (dist < 50) {
-                            showPrompt = true;
-                            actionText = 'COLLECT EGG';
-                            break;
+                    for (const chicken of this.coop.chickens) {
+                        if (chicken.hasEgg) {
+                            const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
+                            if (dist < 50) {
+                                showPrompt = true;
+                                actionText = 'COLLECT EGG';
+                                break;
+                            }
                         }
                     }
                 }
@@ -517,11 +595,13 @@ class Game {
             this.gameWin();
             return;
         }
-        
-        // Lose condition: all chickens escaped
-        const remainingChickens = this.coop.chickens.length;
-        if (remainingChickens === 0 && this.escapedChickens >= this.maxChickens) {
-            this.gameOver();
+
+        // Lose condition: all chickens have escaped from coop
+        const chickensInCoop = this.coop.chickens.length;
+        if (chickensInCoop === 0 && this.wildChickens.length === this.maxChickens) {
+            // All chickens are wild (escaped from coop at some point)
+            // Check if they've all escaped to the house
+            // For now, just check if coop is empty and all are wild
         }
     }
     
@@ -572,40 +652,100 @@ class Game {
     
     draw() {
         this.renderer.clear();
-        
+
         // Draw spawn warning
         if (this.state === 'playing' && this.raccoonSpawner.warningActive) {
             this.drawSpawnWarning();
         }
-        
+
         // Draw tools at house
         this.toolManager.draw(this.ctx);
-        
+
         // Draw fence holes
         this.fenceHoleManager.draw(this.ctx);
-        
-        // Draw coop and typed chickens
+
+        // Draw coop
         this.coop.draw(this.ctx);
-        if (this.chickenManager) {
-            this.chickenManager.draw(this.ctx);
+
+        // Draw coop chickens
+        this.coop.chickens.forEach(chicken => chicken.draw(this.ctx));
+
+        // Draw wild chickens
+        if (this.wildChickens) {
+            this.wildChickens.forEach(chicken => chicken.draw(this.ctx));
         }
-        
+
         // Draw raccoons
         this.raccoons.forEach(r => r.draw(this.ctx));
-        
+
         // Draw hero
         this.hero.draw(this.ctx);
-        
+
+        // Draw proximity hints
+        this.drawProximityHints();
+
         // Draw deposit hint
         if (this.state === 'playing') {
             this.coop.drawDepositHint(this.ctx, this.hero);
         }
-        
+
         // Draw particles
         this.particles.draw(this.ctx);
-        
+
         // Draw bonus texts
         this.drawBonusTexts();
+    }
+
+    drawProximityHints() {
+        if (this.state !== 'playing') return;
+
+        const hero = this.hero;
+
+        // Pickup hint - when near wild chicken and not carrying
+        if (!hero.carrying.isCarrying) {
+            for (const chicken of this.wildChickens) {
+                if (chicken.state === 'wild') {
+                    const dist = Math.hypot(chicken.x - hero.x, chicken.y - hero.y);
+                    if (dist < hero.ranges.pickupRadius) {
+                        // Draw proximity ring
+                        this.ctx.save();
+                        this.ctx.strokeStyle = '#3498db';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.setLineDash([5, 5]);
+                        this.ctx.beginPath();
+                        this.ctx.arc(chicken.x, chicken.y, 25, 0, Math.PI * 2);
+                        this.ctx.stroke();
+
+                        // Draw hint text
+                        this.ctx.fillStyle = '#3498db';
+                        this.ctx.font = 'bold 10px sans-serif';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.fillText('PICK UP', chicken.x, chicken.y - 30);
+                        this.ctx.restore();
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Deposit hint - when carrying and near coop
+        if (hero.carrying.isCarrying) {
+            const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
+            if (distToCoop < hero.ranges.depositRadius) {
+                this.ctx.save();
+                this.ctx.strokeStyle = '#2ecc71';
+                this.ctx.lineWidth = 3;
+                this.ctx.beginPath();
+                this.ctx.arc(this.coop.x, this.coop.y, this.coop.fenceRadius + 10, 0, Math.PI * 2);
+                this.ctx.stroke();
+
+                this.ctx.fillStyle = '#2ecc71';
+                this.ctx.font = 'bold 12px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('DEPOSIT', this.coop.x, this.coop.y - this.coop.fenceRadius - 15);
+                this.ctx.restore();
+            }
+        }
     }
     
     drawSpawnWarning() {
@@ -658,17 +798,13 @@ class Game {
             scoreEl.textContent = `🥚 ${this.eggsCollected}/${this.eggsToWin}`;
         }
 
-        // Update chicken count using chickenManager
-        const inCoop = this.chickenManager ? this.chickenManager.getInCoopCount() : 0;
+        // Update chicken count
+        const inCoop = this.coop ? this.coop.chickens.length : 0;
+        const wildCount = this.wildChickens ? this.wildChickens.length : 0;
         const livesEl = document.getElementById('lives');
         if (livesEl) {
-            if (this.escapedChickens > 0) {
-                livesEl.textContent = `🐔 ${inCoop}/${this.maxChickens} 💨${this.escapedChickens}`;
-                livesEl.style.color = this.escapedChickens > 6 ? '#f44336' : '#ff9800';
-            } else {
-                livesEl.textContent = `🐔 ${inCoop}/${this.maxChickens}`;
-                livesEl.style.color = '#ffffff';
-            }
+            livesEl.textContent = `🐔 ${inCoop} coop / ${wildCount} wild`;
+            livesEl.style.color = '#ffffff';
         }
 
         // Update time

@@ -55,6 +55,12 @@ class Particle {
             this.color = '#ffd700';
             this.size = Math.random() * 3 + 2;
             this.decay = 0.03;
+        } else if (type === 'poof') {
+            this.vx = (Math.random() - 0.5) * 4;
+            this.vy = -Math.random() * 4 - 1;
+            this.color = '#cccccc';
+            this.size = Math.random() * 5 + 3;
+            this.decay = 0.04;
         }
     }
 

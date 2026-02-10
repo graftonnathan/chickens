@@ -45,6 +45,59 @@ class Hero {
 
         // Trail for sprint
         this.sprintTrail = [];
+
+        // Chicken carrying
+        this.carrying = {
+            isCarrying: false,
+            chickenId: null,
+            chicken: null  // Reference to chicken object
+        };
+
+        // Interaction ranges
+        this.ranges = {
+            pickupRadius: 40,
+            depositRadius: 60
+        };
+    }
+
+    // ==================== CHICKEN CARRYING ====================
+
+    pickUpChicken(chicken) {
+        if (this.carrying.isCarrying) return false;
+        if (!chicken.canBePickedUp()) return false;
+
+        this.carrying.isCarrying = true;
+        this.carrying.chickenId = chicken.id;
+        this.carrying.chicken = chicken;
+
+        chicken.pickUp();
+        return true;
+    }
+
+    depositChicken(coop) {
+        if (!this.carrying.isCarrying || !this.carrying.chicken) return false;
+
+        const chicken = this.carrying.chicken;
+        const deposited = chicken.depositIntoCoop(coop);
+
+        if (deposited) {
+            coop.chickens.push(chicken);
+            this.carrying.isCarrying = false;
+            this.carrying.chickenId = null;
+            this.carrying.chicken = null;
+            return true;
+        }
+
+        return false;
+    }
+
+    getCarriedChickenPosition() {
+        // Position chicken above/beside player
+        const offsetX = this.facingDirection === 'right' ? 20 : -20;
+        return {
+            x: this.x + offsetX,
+            y: this.y - 15
+        };
     }
     
     update(deltaTime, input, chickens, particleSystem) {
@@ -92,6 +145,13 @@ class Hero {
 
         // Update active spell effects
         this.updateSpellEffects(deltaTime, chickens);
+
+        // Update carried chicken position
+        if (this.carrying.isCarrying && this.carrying.chicken) {
+            const pos = this.getCarriedChickenPosition();
+            this.carrying.chicken.x = pos.x;
+            this.carrying.chicken.y = pos.y;
+        }
     }
 
     // ==================== SPELL SYSTEM ====================
@@ -304,6 +364,9 @@ class Hero {
         // Draw carried tool
         this.drawTool(ctx);
 
+        // Draw carried chicken (after hero so it appears on top)
+        this.drawCarriedChicken(ctx);
+
         // Draw spell effects
         this.drawSpellEffects(ctx);
     }
@@ -409,11 +472,26 @@ class Hero {
         ctx.fill();
     }
     
+    drawCarriedChicken(ctx) {
+        if (!this.carrying.isCarrying || !this.carrying.chicken) return;
+
+        // Draw the carried chicken (it updates its position in update())
+        this.carrying.chicken.draw(ctx);
+
+        // Draw carrying indicator
+        ctx.save();
+        ctx.fillStyle = '#3498db';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('👋', this.carrying.chicken.x, this.carrying.chicken.y - 25);
+        ctx.restore();
+    }
+
     drawHammerIcon(ctx) {
         // Hammer head
         ctx.fillStyle = '#9e9e9e';
         ctx.fillRect(-8, -8, 16, 8);
-        
+
         // Handle
         ctx.fillStyle = '#8b4513';
         ctx.fillRect(-2, 0, 4, 15);

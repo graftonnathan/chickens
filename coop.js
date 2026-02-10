@@ -46,28 +46,17 @@ class Coop {
     }
     
     initChickens() {
-        for (let i = 0; i < 12; i++) {
-            // Spawn chickens in a circle pattern inside fence, keeping clear of openings
-            const angle = (i / 12) * Math.PI * 2;
-            // Keep chickens within inner 70% of fence radius, away from edges
-            const dist = 15 + Math.random() * 35;
+        // Start with empty coop - chickens spawn wild in the field
+        this.chickens = [];
+    }
 
-            const chicken = new Chicken(
-                i,
-                this.x + Math.cos(angle) * dist,
-                this.y + Math.sin(angle) * dist
-            );
-
-            // Ensure chickens start in coop
-            chicken.inCoop = true;
-            chicken.isFleeing = false;
-            chicken.state = 'idle';
-
-            this.chickens.push(chicken);
-        }
+    addChicken(chicken) {
+        if (this.chickens.length >= this.maxChickens) return false;
+        this.chickens.push(chicken);
+        return true;
     }
     
-    update(deltaTime) {
+    update(deltaTime, gameTime) {
         // Update spook timer
         if (this.spookTimer > 0) {
             this.spookTimer -= deltaTime * 1000;
@@ -80,13 +69,13 @@ class Coop {
         // Update all chickens
         const escaped = [];
         this.chickens.forEach(chicken => {
-            const result = chicken.update(deltaTime, this);
+            const result = chicken.update(deltaTime, this, gameTime);
             if (result === 'escaped') {
                 escaped.push(chicken);
             }
         });
 
-        // Remove fully escaped chickens (reached house)
+        // Remove fully escaped chickens (reached exit)
         escaped.forEach(chicken => {
             const idx = this.chickens.indexOf(chicken);
             if (idx > -1) {
@@ -95,7 +84,7 @@ class Coop {
             }
         });
 
-        return escaped.length; // Return number of escaped chickens
+        return escaped; // Return array of escaped chickens
     }
     
     spook() {
