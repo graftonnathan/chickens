@@ -149,7 +149,14 @@ class Game {
         
         // Update hero
         this.hero.update(deltaTime, this.input, this.chickens, this.particles);
-        
+
+        // Fence collision - prevent hero from entering coop enclosure (only through south gap)
+        const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
+        if (!fenceResult.inCoop) {
+            this.hero.x = fenceResult.x;
+            this.hero.y = fenceResult.y;
+        }
+
         // Update basket item (glow animation)
         this.basketItem.update(deltaTime);
         

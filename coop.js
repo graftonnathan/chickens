@@ -8,12 +8,12 @@ class Coop {
         this.width = 70;
         this.height = 55;
         
-        // Fence barrier properties - fence on SOUTH, gap on NORTH
+        // Fence barrier properties - fence on N/E/W, gap on SOUTH
         this.fenceRadius = 50;      // Distance from center to fence
         this.fenceHeight = 30;      // Visual height of fence posts
-        this.gapStart = Math.PI * 1.25;  // 225 degrees (SW) - gap start
-        this.gapEnd = Math.PI * 1.75;    // 315 degrees (SE) - gap end
-        // Gap is on NORTH side (facing house)
+        this.gapStart = Math.PI * 0.25;  // 45 degrees (SE) - gap start
+        this.gapEnd = Math.PI * 0.75;    // 135 degrees (SW) - gap end
+        // Gap is on SOUTH side (facing house)
         
         // Egg manager for spawning eggs inside coop
         this.eggManager = new EggManager(this);
@@ -60,19 +60,19 @@ class Coop {
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Shed door (wooden) - facing SOUTH (toward house)
+        // Shed door (wooden) - facing NORTH (toward gap/fence)
         ctx.fillStyle = '#8D6E63';
-        ctx.fillRect(this.x - 12, this.y + 15, 24, 40);
+        ctx.fillRect(this.x - 12, this.y + 5, 24, 40);
         
         // Door frame
         ctx.strokeStyle = '#5D4037';
         ctx.lineWidth = 2;
-        ctx.strokeRect(this.x - 12, this.y + 15, 24, 40);
-        
+        ctx.strokeRect(this.x - 12, this.y + 5, 24, 40);
+
         // Door handle
         ctx.fillStyle = '#FFD54F';
         ctx.beginPath();
-        ctx.arc(this.x + 6, this.y + 35, 2, 0, Math.PI * 2);
+        ctx.arc(this.x + 6, this.y + 25, 2, 0, Math.PI * 2);
         ctx.fill();
         
         // Window on side
@@ -185,36 +185,46 @@ class Coop {
     }
     
     drawFencePost(ctx, x, y) {
-        // Post body
-        ctx.fillStyle = '#8b4513';
+        // Post body (white picket)
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(x - 2, y - this.fenceHeight, 4, this.fenceHeight);
-        
+
         // Pointed top
         ctx.beginPath();
         ctx.moveTo(x - 2, y - this.fenceHeight);
         ctx.lineTo(x, y - this.fenceHeight - 6);
         ctx.lineTo(x + 2, y - this.fenceHeight);
         ctx.fill();
+
+        // Post shadow/outline
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 2, y - this.fenceHeight, 4, this.fenceHeight);
     }
     
     drawGapMarkers(ctx) {
-        // Small marker posts at gap edges with gold orbs
+        // Small white marker posts at gap edges with gold orbs
         const markerAngles = [this.gapStart, this.gapEnd];
-        
+
         markerAngles.forEach(angle => {
             const px = this.x + Math.cos(angle) * this.fenceRadius;
             const py = this.y + Math.sin(angle) * this.fenceRadius;
-            
-            // Shorter marker post
-            ctx.fillStyle = '#a0522d';
+
+            // Shorter white marker post
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(px - 2, py - 20, 4, 20);
-            
+
+            // Post shadow
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px - 2, py - 20, 4, 20);
+
             // Gold orb on top
             ctx.fillStyle = '#ffd700';
             ctx.beginPath();
             ctx.arc(px, py - 25, 3, 0, Math.PI * 2);
             ctx.fill();
-            
+
             // Orb glow
             ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
             ctx.beginPath();
