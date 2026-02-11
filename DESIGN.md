@@ -63,15 +63,17 @@ You are a wizard collecting magical chickens in your backyard. Catch chickens an
 - **Sprint:** Motion blur trail
 - **Spell cast:** Colored aura effects
 
-### 7. Y-Sorted Depth Rendering (NEW - 2026-02-11)
+### 7. Y-Sorted Depth Rendering (UPDATED - 2026-02-11)
 - **System:** Entities sorted by Y-depth for proper roof occlusion
 - **Purpose:** Wizard correctly appears BEHIND roof when north of it, IN FRONT when south
-- **Implementation:** 
+- **Implementation:**
   - `depthManager.js` - Calculates depth Y and roof intersection
-  - Entities sorted by `depthY = y + height * 0.85` (feet position)
-  - Roof drawn as dynamic overlay interleaved with entities
+  - Entities sorted by `depthY = y + height * 0.5` (feet position at bottom of sprite)
+  - Roof drawn as single overlay after all entities behind it, before entities in front
+  - Render order: [Entities behind roof] → [Roof overlay] → [Entities in front of roof]
 - **Roof Geometry:** Triangle peak at (400, 500), base at y=600, slope ±0.25
-- **Files:** `depthManager.js`, modified `renderer.js`, modified `game.js`
+- **Files:** `depthManager.js`, `renderer.js` (roof overlay methods), `game.js` (Y-sort loop)
+- **Bug Fixed:** Color bleeding no longer occurs - proper z-sorting ensures clean roof/wizard occlusion
 
 ---
 
