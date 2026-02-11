@@ -302,6 +302,52 @@ const VICTORY_FRAMES = [
     }
 ];
 
+// Hammer/Repair animation - 6 frame swing cycle
+const HAMMER_FRAMES = [
+    { // Frame 0: Wind up - arm raised back
+        bodyY: 0, bodyScaleY: 0.98, bodyRotation: -0.1,
+        legL: { angle: 0.1, x: -5, y: 0 }, legR: { angle: -0.2, x: 5, y: 0 },
+        armL: { angle: -0.3, x: -12, y: -5 }, 
+        armR: { angle: -1.8, x: 20, y: -15 }, // Arm raised high with hammer
+        hatRotation: -0.1, hatY: 0, robeFlare: 5, beardSway: -0.1, staffAngle: 0
+    },
+    { // Frame 1: Swing start - arm forward
+        bodyY: 2, bodyScaleY: 0.97, bodyRotation: 0.05,
+        legL: { angle: 0.05, x: -5, y: 0 }, legR: { angle: -0.15, x: 5, y: 0 },
+        armL: { angle: -0.2, x: -12, y: -5 },
+        armR: { angle: -0.5, x: 18, y: -8 }, // Arm coming down
+        hatRotation: 0.05, hatY: 1, robeFlare: 8, beardSway: 0.05, staffAngle: 0
+    },
+    { // Frame 2: Impact - arm down
+        bodyY: 4, bodyScaleY: 0.95, bodyRotation: 0.15,
+        legL: { angle: 0, x: -5, y: 0 }, legR: { angle: -0.1, x: 5, y: 0 },
+        armL: { angle: -0.1, x: -12, y: -5 },
+        armR: { angle: 0.8, x: 12, y: 5 }, // Arm extended forward/down
+        hatRotation: 0.15, hatY: 2, robeFlare: 12, beardSway: 0.15, staffAngle: 0
+    },
+    { // Frame 3: Follow through - arm continues down
+        bodyY: 3, bodyScaleY: 0.96, bodyRotation: 0.1,
+        legL: { angle: 0, x: -5, y: 0 }, legR: { angle: -0.05, x: 5, y: 0 },
+        armL: { angle: -0.15, x: -12, y: -5 },
+        armR: { angle: 0.5, x: 15, y: 0 }, // Arm rising slightly
+        hatRotation: 0.1, hatY: 1, robeFlare: 10, beardSway: 0.1, staffAngle: 0
+    },
+    { // Frame 4: Recovery - arm coming back up
+        bodyY: 1, bodyScaleY: 0.98, bodyRotation: 0,
+        legL: { angle: 0.05, x: -5, y: 0 }, legR: { angle: -0.1, x: 5, y: 0 },
+        armL: { angle: -0.2, x: -12, y: -5 },
+        armR: { angle: -0.5, x: 16, y: -8 }, // Arm mid-rise
+        hatRotation: 0.05, hatY: 0, robeFlare: 7, beardSway: 0.05, staffAngle: 0
+    },
+    { // Frame 5: Return to ready - arm up
+        bodyY: 0, bodyScaleY: 1.0, bodyRotation: -0.05,
+        legL: { angle: 0.1, x: -5, y: 0 }, legR: { angle: -0.15, x: 5, y: 0 },
+        armL: { angle: -0.3, x: -12, y: -5 },
+        armR: { angle: -1.2, x: 18, y: -12 }, // Arm raised for next swing
+        hatRotation: -0.05, hatY: 0, robeFlare: 5, beardSway: -0.05, staffAngle: 0
+    }
+];
+
 // Master animation collection
 const WIZARD_ANIMATIONS = {
     idle: IDLE_FRAMES,
@@ -311,5 +357,7 @@ const WIZARD_ANIMATIONS = {
     carry: CARRY_FRAMES,
     deposit: DEPOSIT_FRAMES,
     startled: STARTLED_FRAMES,
-    victory: VICTORY_FRAMES
+    victory: VICTORY_FRAMES,
+    hammer: HAMMER_FRAMES,
+    cast: HAMMER_FRAMES  // Alias for compatibility
 };

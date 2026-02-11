@@ -57,6 +57,19 @@ class Hero {
             pickupRadius: 40,
             depositRadius: 60
         };
+
+        // Coop state
+        this.inCoop = false;
+    }
+
+    // ==================== COOP ENTRY/EXIT ====================
+
+    enterCoop() {
+        this.inCoop = true;
+    }
+
+    exitCoop() {
+        this.inCoop = false;
     }
 
     // ==================== CHICKEN CARRYING ====================
@@ -145,6 +158,10 @@ class Hero {
     }
     
     update(deltaTime, input, chickens, particleSystem) {
+        // Store last valid position for recovery
+        const lastX = this.x;
+        const lastY = this.y;
+
         this.time += deltaTime;
 
         // Handle sprint
@@ -202,6 +219,23 @@ class Hero {
             chicken.x = pos.x;
             chicken.y = pos.y + bobOffset;
         }
+
+        // Validate new position and recover if corrupted
+        if (!Number.isFinite(this.x) || !Number.isFinite(this.y)) {
+            console.error('[Hero] Position corruption detected, recovering:', {
+                bad: { x: this.x, y: this.y },
+                recovering: { x: lastX, y: lastY }
+            });
+            this.x = lastX;
+            this.y = lastY;
+            this.vx = 0;
+            this.vy = 0;
+        }
+
+        // Clamp to canvas bounds (with margin)
+        const margin = 50;
+        this.x = Math.max(-margin, Math.min(800 + margin, this.x));
+        this.y = Math.max(-margin, Math.min(600 + margin, this.y));
     }
 
     // ==================== SPELL SYSTEM ====================
@@ -584,8 +618,8 @@ class Hero {
     
     determineAnimationState() {
         if (this.isStartled) return 'startled';
-        if (this.isRepairing) return 'cast';
-        if (this.isSprinting && this.isMoving) return 'sprint';
+        if (this.isRepairing) return 'hammer';
+        if (this.isSprinting && this.isMoving) return 'walk';
         if (this.isMoving) return 'walk';
         return 'idle';
     }

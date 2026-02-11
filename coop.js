@@ -8,11 +8,12 @@ class Coop {
     constructor(x, y) {
         this.x = x || 400;
         this.y = y || 80;
-        this.width = 90;   // Larger shed
-        this.height = 65;  // Taller shed
+        // ENLARGED: 90x65 → 140x90
+        this.width = 140;
+        this.height = 90;
 
         // New fence barrier properties - larger radius
-        this.fenceRadius = 90;       // Increased from 50
+        this.fenceRadius = 120;       // Increased for larger coop
         this.fenceHeight = 30;
 
         // South side openings
@@ -41,8 +42,88 @@ class Coop {
         // Escape tracking
         this.escapedChickens = [];
 
+        // Debug mode (set to true for verbose logging)
+        this.debugCollision = false;
+
+        // Window configuration (12 windows in 3x4 grid)
+        this.windows = {
+            cols: 3,
+            rows: 4,
+            width: 28,
+            height: 22,
+            gap: 6
+        };
+
         // Initialize 12 chickens in coop
         this.initChickens();
+    }
+
+    /**
+     * Log debug message if debug mode is enabled
+     */
+    debugLog(message, data = null) {
+        if (!this.debugCollision) return;
+
+        if (data) {
+            console.log(`[Coop Debug] ${message}:`, data);
+        } else {
+            console.log(`[Coop Debug] ${message}`);
+        }
+    }
+
+    /**
+     * Validates that position coordinates are finite and within canvas bounds
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {number} canvasWidth - Canvas width (default: 800)
+     * @param {number} canvasHeight - Canvas height (default: 600)
+     * @returns {boolean} - True if position is valid
+     */
+    isValidPosition(x, y, canvasWidth = 800, canvasHeight = 600) {
+        return Number.isFinite(x) && Number.isFinite(y) &&
+               x >= -100 && x <= canvasWidth + 100 &&  // Allow slight overshoot
+               y >= -100 && y <= canvasHeight + 100;
+    }
+
+    /**
+     * Logs position corruption for debugging
+     * @param {string} context - Where the corruption was detected
+     * @param {Object} position - {x, y} the invalid position
+     * @param {Object} fallback - {x, y} the fallback position used
+     */
+    logPositionCorruption(context, position, fallback) {
+        console.error(`[Position Error] ${context}:`, {
+            invalid: position,
+            fallback: fallback,
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * Normalize angle to 0-2π range
+     * @param {number} angle - Any angle in radians
+     * @returns {number} - Normalized angle (0 to 2π)
+     */
+    normalizeAngle(angle) {
+        let normalized = angle % (Math.PI * 2);
+        if (normalized < 0) normalized += Math.PI * 2;
+        return normalized;
+    }
+
+    /**
+     * Check if angle is within a gap range with floating-point tolerance
+     * @param {number} angle - Normalized angle (0 to 2π)
+     * @param {number} gapStart - Gap start angle
+     * @param {number} gapEnd - Gap end angle
+     * @param {number} epsilon - Tolerance in radians (default: 0.02)
+     * @returns {boolean} - True if angle is in gap (with tolerance)
+     */
+    isAngleInGapWithTolerance(angle, gapStart, gapEnd, epsilon = 0.02) {
+        // Handle wrap-around case (gap crosses 0/2π boundary)
+        if (gapStart > gapEnd) {
+            return angle >= gapStart - epsilon || angle <= gapEnd + epsilon;
+        }
+        return angle >= gapStart - epsilon && angle <= gapEnd + epsilon;
     }
     
     initChickens() {
@@ -189,11 +270,11 @@ class Coop {
         ctx.beginPath();
         ctx.ellipse(this.x, this.y + this.height, this.width/2 + 10, 8, 0, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Garden shed body
         ctx.fillStyle = '#90A4AE';
         ctx.fillRect(this.x - this.width/2, this.y, this.width, this.height);
-        
+
         // Shed roof
         ctx.fillStyle = '#546E7A';
         ctx.beginPath();
@@ -202,75 +283,116 @@ class Coop {
         ctx.lineTo(this.x + this.width/2 + 5, this.y);
         ctx.closePath();
         ctx.fill();
-        
+
         // Roof overhang detail
         ctx.strokeStyle = '#455A64';
         ctx.lineWidth = 2;
         ctx.stroke();
-        
-        // Shed door - facing NORTH (toward gap)
-        ctx.fillStyle = '#8D6E63';
-        ctx.fillRect(this.x - 12, this.y + 5, 24, 40);
-        
-        // Door frame
-        ctx.strokeStyle = '#5D4037';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(this.x - 12, this.y + 5, 24, 40);
-        
-        // Door handle
-        ctx.fillStyle = '#FFD54F';
-        ctx.beginPath();
-        ctx.arc(this.x + 6, this.y + 25, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Window on side
-        ctx.fillStyle = '#B3E5FC';
-        ctx.fillRect(this.x + 18, this.y + 5, 12, 12);
-        ctx.strokeStyle = '#5D4037';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(this.x + 18, this.y + 5, 12, 12);
-        
-        // Window cross
-        ctx.beginPath();
-        ctx.moveTo(this.x + 24, this.y + 5);
-        ctx.lineTo(this.x + 24, this.y + 17);
-        ctx.moveTo(this.x + 18, this.y + 11);
-        ctx.lineTo(this.x + 30, this.y + 11);
-        ctx.stroke();
-        
+
+        // Draw 12 windows (3x4 grid) showing nesting chickens
+        this.drawWindows(ctx);
+
         // Flower bed
         ctx.fillStyle = '#5D4037';
-        ctx.fillRect(this.x - 35, this.y + this.height + 5, 70, 8);
-        
+        ctx.fillRect(this.x - 55, this.y + this.height + 5, 110, 8);
+
         const flowerColors = ['#E91E63', '#9C27B0', '#FF5722', '#FFC107'];
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 7; i++) {
             ctx.fillStyle = flowerColors[i % flowerColors.length];
             ctx.beginPath();
-            ctx.arc(this.x - 28 + i * 14, this.y + this.height + 3, 4, 0, Math.PI * 2);
+            ctx.arc(this.x - 42 + i * 14, this.y + this.height + 3, 4, 0, Math.PI * 2);
             ctx.fill();
-            
+
             ctx.strokeStyle = '#4CAF50';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(this.x - 28 + i * 14, this.y + this.height + 5);
-            ctx.lineTo(this.x - 28 + i * 14, this.y + this.height + 13);
+            ctx.moveTo(this.x - 42 + i * 14, this.y + this.height + 5);
+            ctx.lineTo(this.x - 42 + i * 14, this.y + this.height + 13);
             ctx.stroke();
+        }
+    }
+
+    drawWindows(ctx) {
+        const { cols, rows, width: w, height: h, gap } = this.windows;
+
+        // Calculate starting position (centered on coop face)
+        const totalWidth = (cols * w) + ((cols - 1) * gap);
+        const totalHeight = (rows * h) + ((rows - 1) * gap);
+        const startX = this.x - totalWidth / 2;
+        const startY = this.y + 10; // Below roof line
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const index = row * cols + col;
+                const wx = startX + col * (w + gap);
+                const wy = startY + row * (h + gap);
+
+                // Draw window frame
+                ctx.fillStyle = '#5D4037';
+                ctx.fillRect(wx - 2, wy - 2, w + 4, h + 4);
+
+                // Get chicken for this window slot
+                const chicken = this.chickens[index];
+
+                if (chicken && chicken.inCoop && chicken.state !== 'escaping') {
+                    // Window shows nesting chicken
+                    ctx.fillStyle = '#8D6E63'; // Dark interior
+                    ctx.fillRect(wx, wy, w, h);
+
+                    // Draw chicken silhouette/emoji
+                    ctx.font = '16px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🐔', wx + w/2, wy + h/2);
+
+                    // Show egg if present
+                    if (chicken.hasEgg) {
+                        ctx.font = '10px sans-serif';
+                        ctx.fillText('🥚', wx + w - 6, wy + h - 4);
+                    }
+                } else {
+                    // Empty window - dark interior
+                    ctx.fillStyle = '#3E2723';
+                    ctx.fillRect(wx, wy, w, h);
+
+                    // Subtle "empty" indicator
+                    ctx.fillStyle = '#5D4037';
+                    ctx.font = '10px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('·', wx + w/2, wy + h/2);
+                }
+
+                // Window cross bars (4-pane look)
+                ctx.strokeStyle = '#5D4037';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(wx + w/2, wy);
+                ctx.lineTo(wx + w/2, wy + h);
+                ctx.moveTo(wx, wy + h/2);
+                ctx.lineTo(wx + w, wy + h/2);
+                ctx.stroke();
+            }
         }
     }
     
     drawFence(ctx) {
-        const posts = 12; // More posts for larger fence
-        const totalPosts = posts + 2; // Extra posts for gaps
+        // SOUTH-END BARRIER ONLY: Draw only the southern arc (90° to 270° approx)
+        const startAngle = Math.PI * 0.25;  // Southwest (~45 degrees)
+        const endAngle = Math.PI * 0.75;    // Southeast (~135 degrees)
+        const posts = 8; // Fewer posts for smaller arc
 
-        // Draw rails - skip the gap areas
+        // Draw rails - only on south side
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
 
         // Top rail
         ctx.beginPath();
         let first = true;
-        for (let i = 0; i <= totalPosts; i++) {
-            const angle = (i / totalPosts) * Math.PI * 2;
+        for (let i = 0; i <= posts; i++) {
+            const t = i / posts;
+            const angle = startAngle + t * (endAngle - startAngle);
+
+            // Skip gaps
             if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
 
             const px = this.x + Math.cos(angle) * this.fenceRadius;
@@ -288,8 +410,11 @@ class Coop {
         // Bottom rail
         ctx.beginPath();
         first = true;
-        for (let i = 0; i <= totalPosts; i++) {
-            const angle = (i / totalPosts) * Math.PI * 2;
+        for (let i = 0; i <= posts; i++) {
+            const t = i / posts;
+            const angle = startAngle + t * (endAngle - startAngle);
+
+            // Skip gaps
             if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
 
             const px = this.x + Math.cos(angle) * this.fenceRadius;
@@ -304,9 +429,12 @@ class Coop {
         }
         ctx.stroke();
 
-        // Draw posts
-        for (let i = 0; i <= totalPosts; i++) {
-            const angle = (i / totalPosts) * Math.PI * 2;
+        // Draw posts - only on south side
+        for (let i = 0; i <= posts; i++) {
+            const t = i / posts;
+            const angle = startAngle + t * (endAngle - startAngle);
+
+            // Skip gaps
             if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
 
             const px = this.x + Math.cos(angle) * this.fenceRadius;
@@ -415,6 +543,18 @@ class Coop {
     isAngleInGap(angle) {
         return this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle);
     }
+
+    /**
+     * Get fence segments for collision detection
+     * @returns {Array} - Array of {x1, y1, x2, y2, isGap} segments
+     */
+    getFenceSegments() {
+        if (typeof Collision === 'undefined' || !Collision.getFenceSegments) {
+            console.error('Collision.getFenceSegments is not available');
+            return [];
+        }
+        return Collision.getFenceSegments(this);
+    }
     
     isInsideFence(x, y) {
         const dx = x - this.x;
@@ -430,39 +570,113 @@ class Coop {
     }
     
     pushOutside(x, y, radius, hero) {
+        // STEP 1: Input validation
+        if (!this.isValidPosition(x, y)) {
+            // Return safe default - push to south side of fence
+            const safeAngle = Math.PI / 2;  // South
+            const safeDist = this.fenceRadius + radius + 10;
+            this.logPositionCorruption('pushOutside input', {x, y}, {
+                x: this.x + Math.cos(safeAngle) * safeDist,
+                y: this.y + Math.sin(safeAngle) * safeDist
+            });
+            return {
+                x: this.x + Math.cos(safeAngle) * safeDist,
+                y: this.y + Math.sin(safeAngle) * safeDist,
+                inGap: false,
+                inCoop: false
+            };
+        }
+
         const dx = x - this.x;
         const dy = y - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx);
 
         const hasBasket = hero && hero.hasTool && hero.hasTool('eggBasket');
-        const inChickenGap = this.isAngleInChickenGap(angle);
-        const inPlayerGap = this.isAngleInPlayerGap(angle);
+
+        // STEP 2: Gap detection with epsilon tolerance
+        const EPSILON = 0.02;  // ~1.15 degrees tolerance
+        const normalizedAngle = this.normalizeAngle(angle);
+
+        const inChickenGap = this.isAngleInGapWithTolerance(normalizedAngle,
+            this.chickenGapStart, this.chickenGapEnd, EPSILON);
+        const inPlayerGap = this.isAngleInGapWithTolerance(normalizedAngle,
+            this.playerGapStart, this.playerGapEnd, EPSILON);
         const inAnyGap = inChickenGap || inPlayerGap;
 
-        // Inside the fence
+        // SOUTH-END BARRIER ONLY: Only apply barrier on south side
+        // South side is angles between π/4 (45°) and 3π/4 (135°)
+        const isSouthSide = normalizedAngle > Math.PI * 0.25 && normalizedAngle < Math.PI * 0.75;
+
+        // If not on south side, no barrier - free movement
+        if (!isSouthSide) {
+            // Check if inside coop area for tool interactions
+            const inCoopArea = dist < this.fenceRadius;
+            return {
+                x,
+                y,
+                inGap: false,
+                inCoop: inCoopArea && inAnyGap
+            };
+        }
+
+        // STEP 3: Handle fence collision with zero-distance protection (SOUTH SIDE ONLY)
         if (dist < this.fenceRadius - radius) {
-            // Player with basket can enter through player gap
+            // Inside the fence on south side
             if (hasBasket && inPlayerGap) {
                 return { x, y, inGap: true, inCoop: true };
             }
 
-            // Can exit through any gap
             if (inAnyGap) {
                 return { x, y, inGap: true, inCoop: false };
             }
 
-            // Push to fence edge
+            // Push to fence edge - PROTECTED from division by zero
+            if (dist < 0.001) {
+                // Too close to center, push south
+                const fallbackAngle = Math.PI / 2;
+                const targetDist = this.fenceRadius - radius;
+                return {
+                    x: this.x + Math.cos(fallbackAngle) * targetDist,
+                    y: this.y + Math.sin(fallbackAngle) * targetDist,
+                    inGap: false,
+                    inCoop: false
+                };
+            }
+
             const targetDist = this.fenceRadius - radius;
+            const newX = this.x + (dx / dist) * targetDist;
+            const newY = this.y + (dy / dist) * targetDist;
+
+            // Validate output
+            if (!this.isValidPosition(newX, newY)) {
+                this.logPositionCorruption('pushOutside calculation', {x: newX, y: newY}, {x, y});
+                return { x, y, inGap: false, inCoop: false };  // Return original as fallback
+            }
+
             return {
-                x: this.x + (dx / dist) * targetDist,
-                y: this.y + (dy / dist) * targetDist,
+                x: newX,
+                y: newY,
                 inGap: false,
                 inCoop: false
             };
         }
 
-        return { x, y, inGap: inAnyGap && dist < this.fenceRadius + radius, inCoop: false };
+        // Outside or at fence boundary
+        const result = {
+            x,
+            y,
+            inGap: inAnyGap && dist < this.fenceRadius + radius,
+            inCoop: false
+        };
+
+        // Final validation
+        if (!this.isValidPosition(result.x, result.y)) {
+            this.logPositionCorruption('pushOutside final', result, {x, y});
+            return { x, y, inGap: false, inCoop: false };
+        }
+
+        return result;
     }
 
     // Check if a chicken is at the escape gap

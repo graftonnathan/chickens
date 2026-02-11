@@ -123,7 +123,20 @@ class Game {
     checkProximityInteractions() {
         const hero = this.hero;
 
-        // 1. Auto-pickup wild chickens (supports dual collection up to max)
+        // 1. Auto-enter coop when carrying feed basket or egg basket
+        const foodBasket = hero.getTool('foodBasket');
+        const eggBasket = hero.getTool('eggBasket');
+
+        if ((foodBasket || eggBasket) && !hero.inCoop) {
+            // Check if hero is at player gap entrance
+            if (this.coop.isAtDepositZone(hero)) {
+                // Auto-enter coop without requiring 'E' press
+                hero.enterCoop();
+                this.addBonusText(hero.x, hero.y - 30, 'Entered Coop');
+            }
+        }
+
+        // 3. Auto-pickup wild chickens (supports dual collection up to max)
         if (hero.canPickUpChicken()) {
             for (const chicken of this.wildChickens) {
                 if (chicken.state === 'wild') {
@@ -144,7 +157,7 @@ class Game {
             }
         }
 
-        // 2. Auto-deposit to coop (deposit all carried chickens)
+        // 4. Auto-deposit to coop (deposit all carried chickens)
         if (hero.isCarrying()) {
             const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
             if (distToCoop < hero.ranges.depositRadius && this.coop.chickens.length < this.coop.maxChickens) {
@@ -209,11 +222,59 @@ class Game {
         // Update hero
         this.hero.update(deltaTime, this.input, this.coop.chickens, this.particles);
 
-        // Fence collision
+        // Fence collision - coop boundary
         const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
-        if (!fenceResult.inCoop) {
-            this.hero.x = fenceResult.x;
-            this.hero.y = fenceResult.y;
+
+        // Validate fenceResult before applying
+        if (fenceResult &&
+            typeof fenceResult.x === 'number' &&
+            typeof fenceResult.y === 'number' &&
+            Number.isFinite(fenceResult.x) &&
+            Number.isFinite(fenceResult.y)) {
+
+            if (!fenceResult.inCoop) {
+                this.hero.x = fenceResult.x;
+                this.hero.y = fenceResult.y;
+            }
+        } else {
+            console.error('[Game] Invalid fenceResult:', fenceResult);
+            // Don't update hero position if result is invalid
+        }
+
+        // Auto-exit coop when walking outside
+        if (this.hero.inCoop && !fenceResult.inCoop && !fenceResult.inGap) {
+            this.hero.exitCoop();
+        }
+
+        // Additional fence segment collision (prevents walking through fence)
+        // Only check if hero is outside the coop (inside uses pushOutside)
+        if (!fenceResult?.inCoop) {
+            const heroBounds = {
+                x: this.hero.x,
+                y: this.hero.y,
+                radius: this.hero.radius
+            };
+
+            // Get fence segments WITH hole awareness
+            const segments = this.coop.getFenceSegments(this.fenceHoleManager);
+
+            // Check each solid fence segment
+            for (const segment of segments) {
+                if (segment.isGap) continue; // Skip gaps
+
+                const corrected = Collision.resolveCircleSegmentCollision(heroBounds, segment);
+                if (corrected) {
+                    // Validate corrected position
+                    if (Number.isFinite(corrected.x) && Number.isFinite(corrected.y)) {
+                        this.hero.x = corrected.x;
+                        this.hero.y = corrected.y;
+                        heroBounds.x = corrected.x;
+                        heroBounds.y = corrected.y;
+                    } else {
+                        console.error('[Game] Invalid collision correction:', corrected);
+                    }
+                }
+            }
         }
 
         // Update wild chickens (wandering)
@@ -556,11 +617,12 @@ class Game {
                 showPrompt = true;
                 actionText = 'PICK UP TOOL';
             }
-        } else {
-            // Can drop tool
-            showPrompt = true;
-            actionText = 'DROP TOOL';
         }
+        // REMOVE: Drop tool prompt - no longer shown in playing field
+        // else {
+        //     showPrompt = true;
+        //     actionText = 'DROP TOOL';
+        // }
 
         // Check for egg collection in coop
         if (!showPrompt) {

@@ -93,36 +93,40 @@ class Renderer {
 
     drawEastFence() {
         // East fence - vertical on right side
-        const fenceX = 760;
+        const fenceX = 780; // was 760 - adjusted for slimmer fence
         const fenceY = 40;
         const fenceHeight = 520; // From top fence to house
-        const fenceWidth = 40;
-        const picketWidth = 8;
-        const picketGap = 4;
-        
+        const fenceWidth = 20; // was 40 - SLIMMED
+        const picketWidth = 5; // was 8
+        const picketGap = 3;   // was 4
+
         this.ctx.fillStyle = '#ffffff';
-        
-        // Vertical rails
-        this.ctx.fillRect(fenceX + 10, fenceY, 6, fenceHeight);
-        this.ctx.fillRect(fenceX + 25, fenceY, 6, fenceHeight);
-        
+
+        // Vertical rails - closer together
+        this.ctx.fillRect(fenceX + 4, fenceY, 4, fenceHeight);   // was +10, 6
+        this.ctx.fillRect(fenceX + 13, fenceY, 4, fenceHeight);  // was +25, 6
+
         // Horizontal pickets
         for (let py = fenceY; py < fenceY + fenceHeight; py += picketWidth + picketGap) {
             this.ctx.fillRect(fenceX, py, fenceWidth, picketWidth);
-            
-            // Pointed top (pointing right - outward)
+
+            // Pointed top (pointing right - outward) - scaled proportionally
             this.ctx.beginPath();
             this.ctx.moveTo(fenceX + fenceWidth, py);
-            this.ctx.lineTo(fenceX + fenceWidth + 8, py + picketWidth / 2);
+            this.ctx.lineTo(fenceX + fenceWidth + 5, py + picketWidth / 2); // was +8
             this.ctx.lineTo(fenceX + fenceWidth, py + picketWidth);
             this.ctx.closePath();
             this.ctx.fill();
-            
+
             // Outline
             this.ctx.strokeStyle = '#e0e0e0';
             this.ctx.lineWidth = 1;
             this.ctx.strokeRect(fenceX, py, fenceWidth, picketWidth);
         }
+
+        // Shadow
+        this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        this.ctx.fillRect(fenceX - 3, fenceY, 3, fenceHeight);
     }
 
     drawWestFence() {
@@ -130,52 +134,56 @@ class Renderer {
         const fenceX = 0;
         const fenceY = 40;
         const fenceHeight = 520;
-        const fenceWidth = 40;
-        const picketWidth = 8;
-        const picketGap = 4;
-        
+        const fenceWidth = 20; // was 40 - SLIMMED
+        const picketWidth = 5; // was 8
+        const picketGap = 3;   // was 4
+
         this.ctx.fillStyle = '#ffffff';
-        
-        // Vertical rails
-        this.ctx.fillRect(fenceX + 10, fenceY, 6, fenceHeight);
-        this.ctx.fillRect(fenceX + 25, fenceY, 6, fenceHeight);
-        
+
+        // Vertical rails - closer together
+        this.ctx.fillRect(fenceX + 3, fenceY, 4, fenceHeight);   // was +10, 6
+        this.ctx.fillRect(fenceX + 12, fenceY, 4, fenceHeight);  // was +25, 6
+
         // Horizontal pickets
         for (let py = fenceY; py < fenceY + fenceHeight; py += picketWidth + picketGap) {
             this.ctx.fillRect(fenceX, py, fenceWidth, picketWidth);
-            
-            // Pointed top (pointing left - outward)
+
+            // Pointed top (pointing left - outward) - scaled proportionally
             this.ctx.beginPath();
             this.ctx.moveTo(fenceX, py);
-            this.ctx.lineTo(fenceX - 8, py + picketWidth / 2);
+            this.ctx.lineTo(fenceX - 5, py + picketWidth / 2); // was -8
             this.ctx.lineTo(fenceX, py + picketWidth);
             this.ctx.closePath();
             this.ctx.fill();
-            
+
             // Outline
             this.ctx.strokeStyle = '#e0e0e0';
             this.ctx.lineWidth = 1;
             this.ctx.strokeRect(fenceX, py, fenceWidth, picketWidth);
         }
+
+        // Shadow
+        this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        this.ctx.fillRect(fenceX + fenceWidth, fenceY, 3, fenceHeight);
     }
 
     drawLawn() {
-        // Base lawn color
+        // Base lawn color - expanded for slimmer fences (20px instead of 40px)
         this.ctx.fillStyle = '#4CAF50';
-        this.ctx.fillRect(40, 80, 720, 420);
-        
+        this.ctx.fillRect(20, 80, 760, 420);  // was 40, 720 - now 20, 760
+
         // Vertical mowing stripes
         this.ctx.save();
         this.ctx.globalAlpha = 0.15;
-        for (let x = 40; x < 760; x += 50) {
+        for (let x = 20; x < 780; x += 50) {  // was 40, 760
             this.ctx.fillStyle = (x / 50) % 2 === 0 ? '#388E3C' : '#66BB6A';
             this.ctx.fillRect(x, 80, 50, 420);
         }
         this.ctx.restore();
-        
+
         // Add some random grass variation
         for (let i = 0; i < 100; i++) {
-            const x = 40 + Math.random() * 720;
+            const x = 20 + Math.random() * 760;  // was 40, 720
             const y = 80 + Math.random() * 420;
             this.ctx.fillStyle = Math.random() > 0.5 ? '#43A047' : '#66BB6A';
             this.ctx.fillRect(x, y, 2, 2);
