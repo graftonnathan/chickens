@@ -21,14 +21,15 @@ class DepthManager {
     }
 
     /**
-     * Calculate depth Y for an entity (position near feet)
+     * Calculate depth Y for an entity (position at feet)
      * @param {Object} entity - Entity with x, y, and optional height
      * @returns {number} Depth Y coordinate
      */
     getEntityDepthY(entity) {
         const height = entity.height || 40;
-        // Use 85% down the sprite height as the depth point (near feet)
-        return entity.y + height * 0.85;
+        // Use bottom of sprite (feet position) as depth point
+        // Entity.y is center, so feet are at y + height/2
+        return entity.y + height * 0.5;
     }
 
     /**

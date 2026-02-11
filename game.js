@@ -734,31 +734,35 @@ class Game {
         // Sort entities by depth (Y position)
         const sortedEntities = this.depthManager.sortByDepth(entities);
 
-        // Track which entities we've drawn roof over
-        let roofDrawn = false;
+        // Find the split point between entities behind and in front of roof
+        // Entities behind roof: depthY < roofY at their X position
+        const behindRoof = [];
+        const inFrontOfRoof = [];
 
-        // Draw entities and roof overlay in sorted order
         for (const entity of sortedEntities) {
             const depthY = this.depthManager.getEntityDepthY(entity);
             const roofY = this.depthManager.getRoofYAt(entity.x);
 
             if (depthY < roofY) {
-                // Entity is BEHIND roof - draw entity first, then roof overlay
-                entity.draw(this.ctx);
-                this.renderer.drawRoofOverlayAtX(this.ctx, entity.x, depthY);
+                behindRoof.push(entity);
             } else {
-                // Entity is IN FRONT of roof - draw remaining roof if not yet drawn
-                if (!roofDrawn) {
-                    this.renderer.drawRoofOverlay(this.ctx);
-                    roofDrawn = true;
-                }
-                entity.draw(this.ctx);
+                inFrontOfRoof.push(entity);
             }
         }
 
-        // Draw roof if no entities triggered it
-        if (!roofDrawn) {
+        // Draw all entities behind the roof first
+        for (const entity of behindRoof) {
+            entity.draw(this.ctx);
+        }
+
+        // Draw the roof overlay once (covers all entities behind it)
+        if (behindRoof.length > 0 || inFrontOfRoof.length > 0) {
             this.renderer.drawRoofOverlay(this.ctx);
+        }
+
+        // Draw all entities in front of the roof
+        for (const entity of inFrontOfRoof) {
+            entity.draw(this.ctx);
         }
 
         // Draw coop (coop is a structure, not sorted with entities)
