@@ -306,6 +306,36 @@ class Chicken {
 
         return 'escaped';
     }
+
+    // Leave coop when spooked by raccoon - transitions to escaping state
+    leaveCoop() {
+        // Only valid if chicken is currently in coop
+        if (!this.coopResidency.inCoop) {
+            return null;
+        }
+
+        // Get the coop reference from residency
+        const coopId = this.coopResidency.coopId;
+
+        // Clear coop residency (but don't remove from chickens array - coop.update handles that)
+        this.coopResidency.inCoop = false;
+        this.coopResidency.coopId = null;
+        this.coopResidency.entryTime = null;
+
+        // Clear any egg-related state
+        this.hasEgg = false;
+        this.escapeTimerStart = null;
+        this.escapeWarningTriggered = false;
+
+        // Transition to escaping state
+        this.state = 'escaping';
+
+        // Position at the escape gap (if coop reference available)
+        // The coop.update() will handle the escape movement via updateEscaping()
+        // We just need to signal that escape has started
+
+        return 'escaping';
+    }
     
     updateIdleMovement(deltaTime) {
         // Random idle movement within coop
