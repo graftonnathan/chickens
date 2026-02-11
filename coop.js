@@ -54,6 +54,10 @@ class Coop {
             gap: 4        // Space between windows
         };
 
+        // NEW: Window assignment system (1 chicken per window)
+        this.windowAssignments = new Array(12).fill(null); // windowAssignments[windowIndex] = chickenId or null
+        this.chickenWindowMap = {}; // chickenWindowMap[chickenId] = windowIndex (persistent)
+
         // Initialize 12 chickens in coop
         this.initChickens();
     }
@@ -131,41 +135,121 @@ class Coop {
         this.chickens = [];
         const types = Object.keys(CHICKEN_TYPE_TEMPLATES);
         const maxChickens = this.maxChickens;
-        
+
         // Golden angle for natural distribution (in radians)
         const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-        
+
         for (let i = 0; i < maxChickens; i++) {
             // Golden angle spiral distribution
             const t = (i + 0.5) / maxChickens;
             const angle = i * goldenAngle;
             const radius = 20 + t * (this.fenceRadius - 40); // Keep within fence with padding
-            
+
             // Calculate position relative to coop center
             const x = this.x + Math.cos(angle) * radius;
             const y = this.y + Math.sin(angle) * radius;
-            
+
             // Create chicken with staggered type assignment
             const chickenType = types[i % types.length];
             const chicken = new Chicken(i, x, y, chickenType);
-            
+
             // Set initial state to in_coop
             chicken.state = 'in_coop';
+            chicken.inCoop = true;
             chicken.coopResidency = {
                 inCoop: true,
                 coopId: this,
                 entryTime: Date.now() / 1000 - Math.random() * 30 // Random entry time for variety
             };
-            
+
             // Stagger fade-in animation
             chicken.spawnAnimation = {
                 active: true,
                 progress: 0,
                 delay: i * 0.1 // 100ms stagger between each chicken
             };
-            
+
+            // Assign chicken to a window (1:1 mapping)
+            this.assignChickenToWindow(chicken);
+
             this.chickens.push(chicken);
         }
+    }
+
+    // NEW: Window assignment methods
+    /**
+     * Assign a chicken to an available window
+     * Returns assigned window index (0-11) or -1 if full
+     */
+    assignChickenToWindow(chicken) {
+        // Check if chicken already has a window assignment
+        if (this.chickenWindowMap[chicken.id] !== undefined) {
+            const windowIndex = this.chickenWindowMap[chicken.id];
+
+            // Verify window is available (empty or already assigned to this chicken)
+            if (this.windowAssignments[windowIndex] === null ||
+                this.windowAssignments[windowIndex] === chicken.id) {
+
+                this.windowAssignments[windowIndex] = chicken.id;
+                chicken.assignedWindow = windowIndex;
+                return windowIndex;
+            }
+        }
+
+        // Find first available window
+        for (let i = 0; i < 12; i++) {
+            if (this.windowAssignments[i] === null) {
+                this.windowAssignments[i] = chicken.id;
+                this.chickenWindowMap[chicken.id] = i;
+                chicken.assignedWindow = i;
+                return i;
+            }
+        }
+
+        // No windows available
+        console.warn(`No available windows for chicken ${chicken.id}`);
+        return -1;
+    }
+
+    /**
+     * Release a chicken's window when they escape
+     * Window becomes empty but mapping is remembered
+     */
+    releaseWindowAssignment(chickenId) {
+        const windowIndex = this.chickenWindowMap[chickenId];
+
+        if (windowIndex !== undefined &&
+            this.windowAssignments[windowIndex] === chickenId) {
+
+            // Mark window as empty
+            this.windowAssignments[windowIndex] = null;
+
+            // NOTE: We keep chickenWindowMap entry so chicken
+            // returns to the same window when they come back
+        }
+    }
+
+    /**
+     * Get the chicken assigned to a specific window
+     * Returns chicken object or null
+     */
+    getChickenForWindow(windowIndex) {
+        const chickenId = this.windowAssignments[windowIndex];
+
+        if (chickenId === null) {
+            return null;
+        }
+
+        // Find chicken by ID in active chickens array
+        return this.chickens.find(c => c.id === chickenId) || null;
+    }
+
+    /**
+     * Get the window index assigned to a specific chicken
+     * Returns window index (0-11) or -1
+     */
+    getWindowForChicken(chickenId) {
+        return this.chickenWindowMap[chickenId] ?? -1;
     }
 
     addChicken(chicken) {
@@ -193,8 +277,12 @@ class Coop {
             }
         });
 
-        // Remove fully escaped chickens (reached exit)
+        // Handle escaped chickens
         escaped.forEach(chicken => {
+            // Release window assignment (window becomes empty)
+            this.releaseWindowAssignment(chicken.id);
+
+            // Remove from active chickens
             const idx = this.chickens.indexOf(chicken);
             if (idx > -1) {
                 this.chickens.splice(idx, 1);
@@ -239,14 +327,36 @@ class Coop {
     }
     
     returnChicken(chicken) {
-        if (chicken && !chicken.inCoop) {
-            chicken.returnToCoop();
-            if (!this.chickens.includes(chicken)) {
-                this.chickens.push(chicken);
+        if (!chicken || chicken.inCoop) return false;
+
+        // Check if chicken has previous window assignment
+        const windowIndex = this.chickenWindowMap[chicken.id];
+
+        if (windowIndex !== undefined) {
+            // Reassign to original window
+            this.windowAssignments[windowIndex] = chicken.id;
+            chicken.assignedWindow = windowIndex;
+        } else {
+            // New chicken - assign to first available
+            const newWindow = this.assignChickenToWindow(chicken);
+            if (newWindow === -1) {
+                console.warn('Cannot return chicken - no windows available');
+                return false;
             }
-            return true;
         }
-        return false;
+
+        // Add back to active chickens
+        chicken.state = 'in_coop';
+        chicken.inCoop = true;
+        this.chickens.push(chicken);
+
+        // Remove from escaped list
+        const escapeIdx = this.escapedChickens.indexOf(chicken);
+        if (escapeIdx > -1) {
+            this.escapedChickens.splice(escapeIdx, 1);
+        }
+
+        return true;
     }
     
     draw(ctx) {
@@ -428,19 +538,21 @@ class Coop {
 
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
-                const index = row * cols + col;
+                const windowIndex = row * cols + col;
                 const wx = startX + col * (w + gap);
                 const wy = startY + row * (h + gap);
 
                 this.drawWindowFrame(ctx, wx, wy, w, h);
 
-                // Get chicken for this window slot
-                const chicken = this.chickens[index];
+                // MODIFIED: Use assignment system instead of direct index
+                const chicken = this.getChickenForWindow(windowIndex);
 
-                if (chicken && chicken.inCoop && chicken.state !== 'escaping') {
+                if (chicken && chicken.state !== 'escaping') {
+                    // Chicken is present - show in window
                     this.drawNestInterior(ctx, wx, wy, w, h);
                     this.drawChickenSprite(ctx, chicken, wx, wy, w, h);
                 } else {
+                    // Window empty (chicken escaped or unassigned)
                     this.drawEmptyWindow(ctx, wx, wy, w, h);
                 }
             }

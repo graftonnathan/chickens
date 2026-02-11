@@ -114,6 +114,9 @@ class Chicken {
             progress: 1.0,
             delay: 0
         };
+
+        // Window assignment for coop display (-1 = unassigned)
+        this.assignedWindow = -1;
     }
     
     update(deltaTime, coop, gameTime) {
