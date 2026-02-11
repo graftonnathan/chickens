@@ -169,6 +169,7 @@ You are a wizard collecting magical chickens in your backyard. Catch chickens an
 - Wizard staff: TICKET-1770773001115-chickens  
 - Chicken personalities: TICKET-1770777887746-chickens
 - Coop graphics: TICKET-1770781537837-chickens
+- Raccoon spook fix: TICKET-1770850805154-chickens (2026-02-11 - Added leaveCoop() method)
 
 ---
 
