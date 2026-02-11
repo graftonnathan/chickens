@@ -747,10 +747,10 @@ class Game {
         // Draw proximity hints
         this.drawProximityHints();
 
-        // Draw deposit hint
-        if (this.state === 'playing') {
-            this.coop.drawDepositHint(this.ctx, this.hero);
-        }
+        // REMOVED: Draw deposit hint - coop entry is now automatic with feed/egg basket
+        // if (this.state === 'playing') {
+        //     this.coop.drawDepositHint(this.ctx, this.hero);
+        // }
 
         // Draw particles
         this.particles.draw(this.ctx);

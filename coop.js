@@ -1146,32 +1146,12 @@ class Coop {
         return nearFence && inPlayerGap;
     }
 
-    drawDepositHint(ctx, hero) {
-        if (!this.isAtDepositZone(hero)) return;
-
-        const gapCenterAngle = (this.playerGapStart + this.playerGapEnd) / 2;
-        const hintX = this.x + Math.cos(gapCenterAngle) * this.fenceRadius;
-        const hintY = this.y + Math.sin(gapCenterAngle) * this.fenceRadius + 30;
-
-        const pulse = Math.sin(Date.now() / 200) * 3;
-
-        ctx.save();
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 12px monospace';
-        ctx.textAlign = 'center';
-        ctx.shadowBlur = 4;
-        ctx.shadowColor = '#000';
-        ctx.fillText('[E] ENTER COOP', hintX, hintY);
-
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.moveTo(hintX, hintY + 10 + pulse);
-        ctx.lineTo(hintX - 8, hintY + pulse);
-        ctx.lineTo(hintX + 8, hintY + pulse);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-    }
+    // REMOVED: drawDepositHint no longer needed - coop entry is now automatic
+    // when carrying feed basket or egg basket (see game.js checkProximityInteractions)
+    // drawDepositHint(ctx, hero) {
+    //     if (!this.isAtDepositZone(hero)) return;
+    //     ...
+    // }
     
     // Check egg collection when hero is inside coop with basket
     checkEggCollection(hero, basket) {
