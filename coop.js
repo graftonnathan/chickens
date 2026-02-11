@@ -174,6 +174,9 @@ class Coop {
 
             this.chickens.push(chicken);
         }
+
+        // Sync visibility after all chickens are assigned to windows
+        this.syncChickenVisibility();
     }
 
     // NEW: Window assignment methods
@@ -252,6 +255,43 @@ class Coop {
         return this.chickenWindowMap[chickenId] ?? -1;
     }
 
+    /**
+     * Synchronize chicken visibility with window assignments
+     * Chickens with windows have hidden world sprites (shown in windows)
+     * Chickens without windows have visible world sprites
+     */
+    syncChickenVisibility() {
+        // Step 1: Hide world sprites for chickens with window assignments
+        for (let windowIndex = 0; windowIndex < 12; windowIndex++) {
+            const chickenId = this.windowAssignments[windowIndex];
+
+            if (chickenId !== null) {
+                const chicken = this.getChickenById(chickenId);
+
+                if (chicken && chicken.inCoop) {
+                    // Chicken has a window slot - show window avatar, hide world sprite
+                    chicken.worldSpriteVisible = false;
+                    chicken.assignedWindow = windowIndex;
+                }
+            }
+        }
+
+        // Step 2: Show world sprites for chickens without windows
+        this.chickens.forEach(chicken => {
+            if (chicken.assignedWindow === -1 || !chicken.inCoop) {
+                // No window assigned or not in coop - show world sprite
+                chicken.worldSpriteVisible = true;
+            }
+        });
+    }
+
+    /**
+     * Get chicken by ID from active chickens
+     */
+    getChickenById(id) {
+        return this.chickens.find(c => c.id === id) || null;
+    }
+
     addChicken(chicken) {
         if (this.chickens.length >= this.maxChickens) return false;
         this.chickens.push(chicken);
@@ -282,6 +322,10 @@ class Coop {
             // Release window assignment (window becomes empty)
             this.releaseWindowAssignment(chicken.id);
 
+            // Show world sprite for escaped chicken
+            chicken.worldSpriteVisible = true;
+            chicken.assignedWindow = -1;
+
             // Remove from active chickens
             const idx = this.chickens.indexOf(chicken);
             if (idx > -1) {
@@ -289,6 +333,9 @@ class Coop {
                 this.escapedChickens.push(chicken);
             }
         });
+
+        // Sync visibility every frame to ensure consistency
+        this.syncChickenVisibility();
 
         return escaped; // Return array of escaped chickens
     }
@@ -348,6 +395,10 @@ class Coop {
         // Add back to active chickens
         chicken.state = 'in_coop';
         chicken.inCoop = true;
+
+        // Hide world sprite - chicken will be shown in window
+        chicken.worldSpriteVisible = false;
+
         this.chickens.push(chicken);
 
         // Remove from escaped list

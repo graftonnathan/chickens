@@ -117,6 +117,9 @@ class Chicken {
 
         // Window assignment for coop display (-1 = unassigned)
         this.assignedWindow = -1;
+
+        // World sprite visibility (false = hidden, shown in window instead)
+        this.worldSpriteVisible = true;
     }
     
     update(deltaTime, coop, gameTime) {
@@ -429,6 +432,9 @@ class Chicken {
     }
     
     draw(ctx) {
+        // Skip drawing if world sprite should be hidden (shown in coop window instead)
+        if (!this.worldSpriteVisible) return;
+
         ctx.save();
 
         // Draw spawn animation (fade-in)

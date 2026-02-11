@@ -84,6 +84,10 @@ class Hero {
 
         this.carrying.chickens.push(chicken);
         chicken.pickUp();
+
+        // Hide world sprite when carrying (will be shown in carried position)
+        chicken.worldSpriteVisible = false;
+
         return true;
     }
 
