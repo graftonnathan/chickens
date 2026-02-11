@@ -11,6 +11,7 @@ class Game {
         this.renderer = new Renderer(this.canvas);
         this.input = new InputHandler();
         this.particles = new ParticleSystem();
+        this.depthManager = new DepthManager();
         
         // Game state
         this.state = 'menu'; // menu, playing, won, lost
@@ -714,48 +715,60 @@ class Game {
     }
     
     draw() {
+        // Layer 0: Background (no roof)
         this.renderer.clear();
 
-        // Draw spawn warning
+        // Draw spawn warning (background layer)
         if (this.state === 'playing' && this.raccoonSpawner.warningActive) {
             this.drawSpawnWarning();
         }
 
-        // Draw tools at house
+        // Layer 1: Ground markers
         this.toolManager.draw(this.ctx);
-
-        // Draw fence holes
         this.fenceHoleManager.draw(this.ctx);
 
-        // Draw coop
-        this.coop.draw(this.ctx);
+        // Layer 2: Y-sorted entities with roof overlay
+        // Collect all entities that need depth sorting
+        const entities = this.depthManager.collectEntities(this);
 
-        // Draw coop chickens
-        this.coop.chickens.forEach(chicken => chicken.draw(this.ctx));
+        // Sort entities by depth (Y position)
+        const sortedEntities = this.depthManager.sortByDepth(entities);
 
-        // Draw wild chickens
-        if (this.wildChickens) {
-            this.wildChickens.forEach(chicken => chicken.draw(this.ctx));
+        // Track which entities we've drawn roof over
+        let roofDrawn = false;
+
+        // Draw entities and roof overlay in sorted order
+        for (const entity of sortedEntities) {
+            const depthY = this.depthManager.getEntityDepthY(entity);
+            const roofY = this.depthManager.getRoofYAt(entity.x);
+
+            if (depthY < roofY) {
+                // Entity is BEHIND roof - draw entity first, then roof overlay
+                entity.draw(this.ctx);
+                this.renderer.drawRoofOverlayAtX(this.ctx, entity.x, depthY);
+            } else {
+                // Entity is IN FRONT of roof - draw remaining roof if not yet drawn
+                if (!roofDrawn) {
+                    this.renderer.drawRoofOverlay(this.ctx);
+                    roofDrawn = true;
+                }
+                entity.draw(this.ctx);
+            }
         }
 
-        // Draw raccoons
-        this.raccoons.forEach(r => r.draw(this.ctx));
+        // Draw roof if no entities triggered it
+        if (!roofDrawn) {
+            this.renderer.drawRoofOverlay(this.ctx);
+        }
 
-        // Draw hero
-        this.hero.draw(this.ctx);
+        // Draw coop (coop is a structure, not sorted with entities)
+        this.coop.draw(this.ctx);
 
         // Draw proximity hints
         this.drawProximityHints();
 
-        // REMOVED: Draw deposit hint - coop entry is now automatic with feed/egg basket
-        // if (this.state === 'playing') {
-        //     this.coop.drawDepositHint(this.ctx, this.hero);
-        // }
-
-        // Draw particles
+        // Layer 3: Effects & UI
         this.particles.draw(this.ctx);
-
-        // Draw bonus texts
         this.drawBonusTexts();
     }
 

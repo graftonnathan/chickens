@@ -22,11 +22,17 @@ class Renderer {
         // Draw lawn
         this.drawLawn();
         
-        // Draw house roof (south wall)
-        this.drawHouseRoof();
+        // Draw house siding below roof (visible portion)
+        this.drawHouseSiding();
         
         // Draw backyard props scattered around
         this.drawProps();
+    }
+
+    clearWithRoof() {
+        // Original clear for compatibility - draws everything including roof
+        this.clear();
+        this.drawHouseRoof();
     }
 
     drawSky() {
@@ -190,13 +196,30 @@ class Renderer {
         }
     }
 
+    drawHouseSiding() {
+        // House siding below roof (extends off-screen)
+        const sidingColor = '#f5f5f5';
+        const sidingLines = '#e0e0e0';
+
+        this.ctx.fillStyle = sidingColor;
+        this.ctx.fillRect(0, 600, 800, 100);
+
+        // Siding lines
+        this.ctx.strokeStyle = sidingLines;
+        this.ctx.lineWidth = 1;
+        for (let y = 610; y < 700; y += 10) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(800, y);
+            this.ctx.stroke();
+        }
+    }
+
     drawHouseRoof() {
         // House roof - triangle peak on south wall
         const roofColor = '#8b4513';
         const roofDark = '#5d4037';
-        const sidingColor = '#f5f5f5';
-        const sidingLines = '#e0e0e0';
-        
+
         // Roof triangle
         this.ctx.fillStyle = roofColor;
         this.ctx.beginPath();
@@ -205,12 +228,12 @@ class Renderer {
         this.ctx.lineTo(800, 600);
         this.ctx.closePath();
         this.ctx.fill();
-        
+
         // Roof outline
         this.ctx.strokeStyle = roofDark;
         this.ctx.lineWidth = 2;
         this.ctx.stroke();
-        
+
         // Roof shingles texture
         this.ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         this.ctx.lineWidth = 1;
@@ -223,20 +246,83 @@ class Renderer {
             this.ctx.lineTo(rightX, y);
             this.ctx.stroke();
         }
-        
-        // Siding below roof (extends off-screen)
-        this.ctx.fillStyle = sidingColor;
-        this.ctx.fillRect(0, 600, 800, 100);
-        
-        // Siding lines
-        this.ctx.strokeStyle = sidingLines;
-        this.ctx.lineWidth = 1;
-        for (let y = 610; y < 700; y += 10) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(800, y);
-            this.ctx.stroke();
+    }
+
+    /**
+     * Draw roof overlay for Y-sorted rendering
+     * Only draws roof portions above the given Y threshold at the given X
+     * @param {CanvasRenderingContext2D} ctx - Canvas context
+     * @param {number} x - X position to draw roof at
+     * @param {number} yThreshold - Only draw roof above this Y
+     */
+    drawRoofOverlayAtX(ctx, x, yThreshold) {
+        const roofPeakX = 400;
+        const roofPeakY = 500;
+        const roofBaseY = 600;
+        const roofSlope = 0.25;
+
+        // Calculate roof Y at this X
+        const roofY = roofPeakY + Math.abs(x - roofPeakX) * roofSlope;
+
+        // If entity is below the roof line, don't draw roof here
+        if (yThreshold >= roofY) return;
+
+        // Draw only the roof portion above the entity
+        const roofColor = '#8b4513';
+        const roofDark = '#5d4037';
+
+        ctx.save();
+
+        // Create clipping region for the roof above the threshold
+        ctx.beginPath();
+        // Start from left edge at roof base
+        ctx.moveTo(Math.max(0, x - 50), roofBaseY);
+        // Go up the left slope to peak
+        ctx.lineTo(roofPeakX, roofPeakY);
+        // Down the right slope to base
+        ctx.lineTo(Math.min(800, x + 50), roofBaseY);
+        ctx.closePath();
+
+        // Clip to only draw above yThreshold
+        ctx.clip();
+
+        // Fill the roof triangle
+        ctx.fillStyle = roofColor;
+        ctx.beginPath();
+        ctx.moveTo(0, 600);
+        ctx.lineTo(400, 500);
+        ctx.lineTo(800, 600);
+        ctx.closePath();
+        ctx.fill();
+
+        // Roof outline
+        ctx.strokeStyle = roofDark;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Roof shingles
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 6; i++) {
+            const y = 500 + i * 16;
+            const leftX = (i * 16) * 4;
+            const rightX = 800 - leftX;
+            ctx.beginPath();
+            ctx.moveTo(leftX, y);
+            ctx.lineTo(rightX, y);
+            ctx.stroke();
         }
+
+        ctx.restore();
+    }
+
+    /**
+     * Draw the complete roof overlay
+     * Used when no entities are behind the roof
+     * @param {CanvasRenderingContext2D} ctx - Canvas context
+     */
+    drawRoofOverlay(ctx) {
+        this.drawHouseRoof();
     }
 
     drawProps() {
