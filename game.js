@@ -158,10 +158,10 @@ class Game {
             }
         }
 
-        // 4. Auto-deposit to coop (deposit all carried chickens)
+        // 4. Auto-deposit to coop (deposit all carried chickens near the door)
         if (hero.isCarrying()) {
-            const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
-            if (distToCoop < hero.ranges.depositRadius && this.coop.chickens.length < this.coop.maxChickens) {
+            const distToDoor = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.doorY);
+            if (distToDoor < hero.ranges.depositRadius + 20 && this.coop.chickens.length < this.coop.maxChickens) {
                 // Deposit all chickens (will deposit as many as coop can hold)
                 const depositedCount = hero.depositAllChickens(this.coop);
                 if (depositedCount > 0) {
@@ -223,7 +223,7 @@ class Game {
         // Update hero
         this.hero.update(deltaTime, this.input, this.coop.chickens, this.particles);
 
-        // Fence collision - coop boundary
+        // Fence collision - coop barrier (rectangular)
         const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
 
         // Validate fenceResult before applying
@@ -233,49 +233,15 @@ class Game {
             Number.isFinite(fenceResult.x) &&
             Number.isFinite(fenceResult.y)) {
 
-            if (!fenceResult.inCoop) {
-                this.hero.x = fenceResult.x;
-                this.hero.y = fenceResult.y;
-            }
+            this.hero.x = fenceResult.x;
+            this.hero.y = fenceResult.y;
         } else {
             console.error('[Game] Invalid fenceResult:', fenceResult);
-            // Don't update hero position if result is invalid
         }
 
         // Auto-exit coop when walking outside
         if (this.hero.inCoop && !fenceResult.inCoop && !fenceResult.inGap) {
             this.hero.exitCoop();
-        }
-
-        // Additional fence segment collision (prevents walking through fence)
-        // Only check if hero is outside the coop (inside uses pushOutside)
-        if (!fenceResult?.inCoop) {
-            const heroBounds = {
-                x: this.hero.x,
-                y: this.hero.y,
-                radius: this.hero.radius
-            };
-
-            // Get fence segments WITH hole awareness
-            const segments = this.coop.getFenceSegments(this.fenceHoleManager);
-
-            // Check each solid fence segment
-            for (const segment of segments) {
-                if (segment.isGap) continue; // Skip gaps
-
-                const corrected = Collision.resolveCircleSegmentCollision(heroBounds, segment);
-                if (corrected) {
-                    // Validate corrected position
-                    if (Number.isFinite(corrected.x) && Number.isFinite(corrected.y)) {
-                        this.hero.x = corrected.x;
-                        this.hero.y = corrected.y;
-                        heroBounds.x = corrected.x;
-                        heroBounds.y = corrected.y;
-                    } else {
-                        console.error('[Game] Invalid collision correction:', corrected);
-                    }
-                }
-            }
         }
 
         // Update wild chickens (wandering)
@@ -723,9 +689,8 @@ class Game {
             this.drawSpawnWarning();
         }
 
-        // Layer 1: Ground markers
-        this.toolManager.draw(this.ctx);
-        this.fenceHoleManager.draw(this.ctx);
+        // Draw coop structure (background layer - before entities)
+        this.coop.draw(this.ctx);
 
         // Layer 2: Y-sorted entities with roof overlay
         // Collect all entities that need depth sorting
@@ -760,13 +725,14 @@ class Game {
             this.renderer.drawRoofOverlay(this.ctx);
         }
 
+        // Ground markers drawn after roof so tools aren't hidden behind it
+        this.toolManager.draw(this.ctx);
+        this.fenceHoleManager.draw(this.ctx);
+
         // Draw all entities in front of the roof
         for (const entity of inFrontOfRoof) {
             entity.draw(this.ctx);
         }
-
-        // Draw coop (coop is a structure, not sorted with entities)
-        this.coop.draw(this.ctx);
 
         // Draw proximity hints
         this.drawProximityHints();
@@ -815,14 +781,18 @@ class Game {
                 this.ctx.save();
                 this.ctx.strokeStyle = '#2ecc71';
                 this.ctx.lineWidth = 3;
-                this.ctx.beginPath();
-                this.ctx.arc(this.coop.x, this.coop.y, this.coop.fenceRadius + 10, 0, Math.PI * 2);
-                this.ctx.stroke();
+                // Draw rectangle around coop barrier
+                this.ctx.strokeRect(
+                    this.coop.barrierLeft - 5,
+                    this.coop.barrierTop - 5,
+                    this.coop.barrierRight - this.coop.barrierLeft + 10,
+                    this.coop.barrierBottom - this.coop.barrierTop + 10
+                );
 
                 this.ctx.fillStyle = '#2ecc71';
                 this.ctx.font = 'bold 12px sans-serif';
                 this.ctx.textAlign = 'center';
-                this.ctx.fillText('DEPOSIT', this.coop.x, this.coop.y - this.coop.fenceRadius - 15);
+                this.ctx.fillText('DEPOSIT', this.coop.x, this.coop.barrierTop - 15);
                 this.ctx.restore();
             }
         }

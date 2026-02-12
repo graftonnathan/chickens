@@ -174,23 +174,24 @@ class Renderer {
     }
 
     drawLawn() {
-        // Base lawn color - expanded for slimmer fences (20px instead of 40px)
+        // Base lawn color - extends all the way to y=600 so the roof-overlap zone
+        // (y 500-600) is repainted each frame, preventing entity smearing.
         this.ctx.fillStyle = '#4CAF50';
-        this.ctx.fillRect(20, 80, 760, 420);  // was 40, 720 - now 20, 760
+        this.ctx.fillRect(20, 80, 760, 520);  // y 80 → 600
 
         // Vertical mowing stripes
         this.ctx.save();
         this.ctx.globalAlpha = 0.15;
-        for (let x = 20; x < 780; x += 50) {  // was 40, 760
+        for (let x = 20; x < 780; x += 50) {
             this.ctx.fillStyle = (x / 50) % 2 === 0 ? '#388E3C' : '#66BB6A';
-            this.ctx.fillRect(x, 80, 50, 420);
+            this.ctx.fillRect(x, 80, 50, 520);
         }
         this.ctx.restore();
 
         // Add some random grass variation
         for (let i = 0; i < 100; i++) {
-            const x = 20 + Math.random() * 760;  // was 40, 720
-            const y = 80 + Math.random() * 420;
+            const x = 20 + Math.random() * 760;
+            const y = 80 + Math.random() * 520;
             this.ctx.fillStyle = Math.random() > 0.5 ? '#43A047' : '#66BB6A';
             this.ctx.fillRect(x, y, 2, 2);
         }
@@ -220,21 +221,21 @@ class Renderer {
         const roofColor = '#8b4513';
         const roofDark = '#5d4037';
 
-        // Roof triangle
-        this.ctx.fillStyle = roofColor;
+        this.ctx.save();
+
+        // Roof triangle (clip to prevent shingles bleeding into grass)
         this.ctx.beginPath();
         this.ctx.moveTo(0, 600);
         this.ctx.lineTo(400, 500);
         this.ctx.lineTo(800, 600);
         this.ctx.closePath();
+        this.ctx.clip();
+
+        // Fill roof
+        this.ctx.fillStyle = roofColor;
         this.ctx.fill();
 
-        // Roof outline
-        this.ctx.strokeStyle = roofDark;
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
-
-        // Roof shingles texture
+        // Roof shingles texture (now clipped to roof)
         this.ctx.strokeStyle = 'rgba(0,0,0,0.2)';
         this.ctx.lineWidth = 1;
         for (let i = 1; i < 6; i++) {
@@ -246,6 +247,18 @@ class Renderer {
             this.ctx.lineTo(rightX, y);
             this.ctx.stroke();
         }
+
+        this.ctx.restore();
+
+        // Roof outline
+        this.ctx.strokeStyle = roofDark;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, 600);
+        this.ctx.lineTo(400, 500);
+        this.ctx.lineTo(800, 600);
+        this.ctx.closePath();
+        this.ctx.stroke();
     }
 
     /**

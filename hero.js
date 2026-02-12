@@ -236,10 +236,9 @@ class Hero {
             this.vy = 0;
         }
 
-        // Clamp to canvas bounds (with margin)
-        const margin = 50;
-        this.x = Math.max(-margin, Math.min(800 + margin, this.x));
-        this.y = Math.max(-margin, Math.min(600 + margin, this.y));
+        // Clamp to play area (25px inside the visual fences)
+        this.x = Math.max(45, Math.min(755, this.x));
+        this.y = Math.max(60, Math.min(475, this.y));
     }
 
     // ==================== SPELL SYSTEM ====================

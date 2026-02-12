@@ -1,8 +1,7 @@
 /**
- * Coop class - Garden Shed with redesigned fence barrier and chicken management
- * Larger coop with southern barrier featuring:
- * - Small chicken escape opening
- * - Player access opening for egg harvest/feeding
+ * Coop class - Garden Shed with solid rectangular barrier
+ * The coop itself is the barrier. A small door on the south side
+ * allows chickens to escape.
  */
 class Coop {
     constructor(x, y) {
@@ -12,24 +11,29 @@ class Coop {
         this.width = 180;
         this.height = 120;
 
-        // New fence barrier properties - larger radius
-        this.fenceRadius = 120;       // Increased for larger coop
-        this.fenceHeight = 30;
+        // Foundation adds to effective collision height
+        this.foundationHeight = 18;
 
-        // South side openings
-        // Chicken escape gap (small, south side)
-        this.chickenGapStart = Math.PI * 0.40;  // ~72 degrees
-        this.chickenGapEnd = Math.PI * 0.50;    // ~90 degrees (center south)
+        // Door on south wall (chicken escape)
+        this.doorWidth = 30;
+        this.doorHeight = 28;
 
-        // Player access gap (larger, also on south side but offset)
-        this.playerGapStart = Math.PI * 0.55;   // ~99 degrees
-        this.playerGapEnd = Math.PI * 0.70;     // ~126 degrees
+        // Visual bottom of the coop (body + foundation)
+        this.visualBottom = this.y + this.height + this.foundationHeight; // 218
 
-        // Gap markers for visual indication
-        this.gapMarkers = [
-            { angle: (this.chickenGapStart + this.chickenGapEnd) / 2, type: 'chicken', label: '🐔' },
-            { angle: (this.playerGapStart + this.playerGapEnd) / 2, type: 'player', label: '🚪' }
-        ];
+        // Rectangular barrier bounds - front retracted 50px so hero can approach
+        this.barrierLeft = this.x - this.width / 2 - 5;
+        this.barrierRight = this.x + this.width / 2 + 5;
+        this.barrierTop = this.y - 5;
+        this.barrierBottom = this.visualBottom - 50; // 168
+
+        // Door opening bounds (centered on south wall, at visual bottom)
+        this.doorLeft = this.x - this.doorWidth / 2;
+        this.doorRight = this.x + this.doorWidth / 2;
+        this.doorY = this.visualBottom;  // Actual visual bottom of coop
+
+        // Keep fenceRadius for backward compat with deposit zone
+        this.fenceRadius = Math.max(this.width, this.height) / 2 + 20;
 
         // Chicken management
         this.chickens = [];
@@ -131,23 +135,17 @@ class Coop {
     }
     
     initChickens() {
-        // Initialize 12 chickens inside the coop using golden angle spiral distribution
+        // Initialize 12 chickens inside the coop
         this.chickens = [];
         const types = Object.keys(CHICKEN_TYPE_TEMPLATES);
         const maxChickens = this.maxChickens;
 
-        // Golden angle for natural distribution (in radians)
-        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-
         for (let i = 0; i < maxChickens; i++) {
-            // Golden angle spiral distribution
-            const t = (i + 0.5) / maxChickens;
-            const angle = i * goldenAngle;
-            const radius = 20 + t * (this.fenceRadius - 40); // Keep within fence with padding
-
-            // Calculate position relative to coop center
-            const x = this.x + Math.cos(angle) * radius;
-            const y = this.y + Math.sin(angle) * radius;
+            // Place chickens within the coop rectangle
+            const col = i % 6;
+            const row = Math.floor(i / 6);
+            const x = this.x - this.width / 2 + 20 + col * 28;
+            const y = this.y + 50 + row * 30;
 
             // Create chicken with staggered type assignment
             const chickenType = types[i % types.length];
@@ -413,14 +411,11 @@ class Coop {
     draw(ctx) {
         ctx.save();
         
-        // Draw fence first (behind coop)
-        this.drawFence(ctx);
-        
-        // Draw coop shed
+        // Draw coop shed (the shed IS the barrier)
         this.drawShed(ctx);
-        
-        // Draw gap markers
-        this.drawGapMarkers(ctx);
+
+        // Draw the small door on south wall
+        this.drawDoor(ctx);
         
         ctx.restore();
     }
@@ -437,9 +432,6 @@ class Coop {
 
         // Draw 12 windows (2x6 grid) showing nesting chickens
         this.drawWindowsRealistic(ctx);
-
-        // Flower bed at base
-        this.drawFlowerBed(ctx);
     }
 
     drawCoopExterior(ctx) {
@@ -547,7 +539,7 @@ class Coop {
         ctx.fillStyle = '#4E342E';
         ctx.fillRect(leftX, bedY, bedWidth, 10);
 
-        // Flowers
+        // Flowers (skip area around door)
         const flowerColors = ['#E91E63', '#9C27B0', '#FF9800', '#FFEB3B', '#F44336'];
         const flowerPositions = [15, 35, 55, 75, 95, 115, 135, 155];
 
@@ -555,6 +547,10 @@ class Coop {
             if (offset >= bedWidth) return;
 
             const fx = leftX + offset;
+
+            // Skip flowers in the door area
+            if (fx >= this.doorLeft - 5 && fx <= this.doorRight + 5) return;
+
             const fy = bedY - 2;
 
             // Stem
@@ -868,333 +864,145 @@ class Coop {
         ctx.fill();
     }
     
-    drawFence(ctx) {
-        // SOUTH-END BARRIER ONLY: Draw only the southern arc (90° to 270° approx)
-        const startAngle = Math.PI * 0.25;  // Southwest (~45 degrees)
-        const endAngle = Math.PI * 0.75;    // Southeast (~135 degrees)
-        const posts = 8; // Fewer posts for smaller arc
+    drawDoor(ctx) {
+        // Draw a small barn door on the south wall of the coop (at visual bottom)
+        const doorX = this.x - this.doorWidth / 2;
+        const doorY = this.visualBottom - this.doorHeight;
 
-        // Draw rails - only on south side
-        ctx.strokeStyle = '#ffffff';
+        // Door opening (dark interior)
+        ctx.fillStyle = '#1A150F';
+        ctx.fillRect(doorX, doorY, this.doorWidth, this.doorHeight);
+
+        // Door frame (barn red)
+        ctx.strokeStyle = '#B85450';
         ctx.lineWidth = 2;
+        ctx.strokeRect(doorX, doorY, this.doorWidth, this.doorHeight);
 
-        // Top rail
-        ctx.beginPath();
-        let first = true;
-        for (let i = 0; i <= posts; i++) {
-            const t = i / posts;
-            const angle = startAngle + t * (endAngle - startAngle);
+        // Door header
+        ctx.fillStyle = '#B85450';
+        ctx.fillRect(doorX - 2, doorY - 3, this.doorWidth + 4, 4);
 
-            // Skip gaps
-            if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
-
-            const px = this.x + Math.cos(angle) * this.fenceRadius;
-            const py = this.y + Math.sin(angle) * this.fenceRadius - this.fenceHeight;
-
-            if (first) {
-                ctx.moveTo(px, py);
-                first = false;
-            } else {
-                ctx.lineTo(px, py);
-            }
-        }
-        ctx.stroke();
-
-        // Bottom rail
-        ctx.beginPath();
-        first = true;
-        for (let i = 0; i <= posts; i++) {
-            const t = i / posts;
-            const angle = startAngle + t * (endAngle - startAngle);
-
-            // Skip gaps
-            if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
-
-            const px = this.x + Math.cos(angle) * this.fenceRadius;
-            const py = this.y + Math.sin(angle) * this.fenceRadius - this.fenceHeight + 15;
-
-            if (first) {
-                ctx.moveTo(px, py);
-                first = false;
-            } else {
-                ctx.lineTo(px, py);
-            }
-        }
-        ctx.stroke();
-
-        // Draw posts - only on south side
-        for (let i = 0; i <= posts; i++) {
-            const t = i / posts;
-            const angle = startAngle + t * (endAngle - startAngle);
-
-            // Skip gaps
-            if (this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle)) continue;
-
-            const px = this.x + Math.cos(angle) * this.fenceRadius;
-            const py = this.y + Math.sin(angle) * this.fenceRadius;
-            this.drawFencePost(ctx, px, py);
-        }
-
-        // Draw gap borders (posts at edges of gaps)
-        this.drawGapBorders(ctx);
-    }
-
-    drawGapBorders(ctx) {
-        // Chicken gap borders
-        [this.chickenGapStart, this.chickenGapEnd].forEach(angle => {
-            const px = this.x + Math.cos(angle) * this.fenceRadius;
-            const py = this.y + Math.sin(angle) * this.fenceRadius;
-            this.drawFencePost(ctx, px, py);
-        });
-
-        // Player gap borders
-        [this.playerGapStart, this.playerGapEnd].forEach(angle => {
-            const px = this.x + Math.cos(angle) * this.fenceRadius;
-            const py = this.y + Math.sin(angle) * this.fenceRadius;
-            this.drawFencePost(ctx, px, py);
-        });
-    }
-    
-    drawFencePost(ctx, x, y) {
+        // Chicken icon above door
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x - 2, y - this.fenceHeight, 4, this.fenceHeight);
-        
-        // Pointed top
-        ctx.beginPath();
-        ctx.moveTo(x - 2, y - this.fenceHeight);
-        ctx.lineTo(x, y - this.fenceHeight - 6);
-        ctx.lineTo(x + 2, y - this.fenceHeight);
-        ctx.fill();
-        
-        // Shadow
-        ctx.strokeStyle = '#e0e0e0';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x - 2, y - this.fenceHeight, 4, this.fenceHeight);
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🐔', this.x, doorY - 5);
     }
     
-    drawGapMarkers(ctx) {
-        // Draw gap markers with icons
-        this.gapMarkers.forEach(marker => {
-            const px = this.x + Math.cos(marker.angle) * this.fenceRadius;
-            const py = this.y + Math.sin(marker.angle) * this.fenceRadius;
+    // ==================== RECTANGULAR BARRIER COLLISION ====================
 
-            // Pulsing gold orb
-            const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
-
-            // Glow
-            ctx.fillStyle = `rgba(255, 215, 0, ${0.3 * pulse})`;
-            ctx.beginPath();
-            ctx.arc(px, py - 15, 8 * pulse, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Core
-            ctx.fillStyle = '#ffd700';
-            ctx.beginPath();
-            ctx.arc(px, py - 15, 4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Label
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '12px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(marker.label, px, py + 10);
-        });
-
-        // Draw gap labels
-        const chickenAngle = (this.chickenGapStart + this.chickenGapEnd) / 2;
-        const playerAngle = (this.playerGapStart + this.playerGapEnd) / 2;
-
-        const cpx = this.x + Math.cos(chickenAngle) * (this.fenceRadius + 25);
-        const cpy = this.y + Math.sin(chickenAngle) * (this.fenceRadius + 25);
-
-        const ppx = this.x + Math.cos(playerAngle) * (this.fenceRadius + 25);
-        const ppy = this.y + Math.sin(playerAngle) * (this.fenceRadius + 25);
-
-        ctx.save();
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.font = 'bold 10px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('CHICKEN EXIT', cpx, cpy);
-        ctx.fillText('PLAYER ACCESS', ppx, ppy);
-        ctx.restore();
-    }
-
-    isAngleInChickenGap(angle) {
-        let normalized = angle;
-        while (normalized < 0) normalized += Math.PI * 2;
-        while (normalized > Math.PI * 2) normalized -= Math.PI * 2;
-        return normalized >= this.chickenGapStart && normalized <= this.chickenGapEnd;
-    }
-
-    isAngleInPlayerGap(angle) {
-        let normalized = angle;
-        while (normalized < 0) normalized += Math.PI * 2;
-        while (normalized > Math.PI * 2) normalized -= Math.PI * 2;
-        return normalized >= this.playerGapStart && normalized <= this.playerGapEnd;
-    }
-
-    isAngleInGap(angle) {
-        return this.isAngleInChickenGap(angle) || this.isAngleInPlayerGap(angle);
+    /**
+     * Check if a point is inside the coop barrier rectangle
+     */
+    isInsideBarrier(x, y) {
+        return x >= this.barrierLeft && x <= this.barrierRight &&
+               y >= this.barrierTop && y <= this.barrierBottom;
     }
 
     /**
-     * Get fence segments for collision detection
-     * @returns {Array} - Array of {x1, y1, x2, y2, isGap} segments
+     * Check if a point is in the door opening
+     */
+    isInDoor(x, y) {
+        return x >= this.doorLeft && x <= this.doorRight &&
+               y >= (this.visualBottom - this.doorHeight) && y <= this.visualBottom + 10;
+    }
+
+    /**
+     * Push an entity outside the coop barrier.
+     * Entities cannot enter the coop rectangle except through the door.
+     * @param {number} x - Entity X
+     * @param {number} y - Entity Y
+     * @param {number} radius - Entity collision radius
+     * @param {Object} hero - Hero object (for tool checks)
+     * @returns {Object} {x, y, inGap, inCoop}
+     */
+    pushOutside(x, y, radius, hero) {
+        // Check if entity overlaps the coop barrier
+        const closestX = Math.max(this.barrierLeft, Math.min(x, this.barrierRight));
+        const closestY = Math.max(this.barrierTop, Math.min(y, this.barrierBottom));
+        
+        const dx = x - closestX;
+        const dy = y - closestY;
+        const distSq = dx * dx + dy * dy;
+
+        // If entity is within the door opening, allow passage
+        if (this.isInDoor(x, y)) {
+            return { x, y, inGap: true, inCoop: true };
+        }
+
+        // Check if entity's circle overlaps the coop rectangle
+        if (distSq < radius * radius) {
+            // Entity overlaps coop - push out
+            const dist = Math.sqrt(distSq);
+            
+            if (dist < 0.001) {
+                // Entity center is inside the rectangle - push to nearest edge
+                const pushLeft = x - this.barrierLeft;
+                const pushRight = this.barrierRight - x;
+                const pushTop = y - this.barrierTop;
+                const pushBottom = this.barrierBottom - y;
+                
+                const minPush = Math.min(pushLeft, pushRight, pushTop, pushBottom);
+                
+                if (minPush === pushLeft) return { x: this.barrierLeft - radius, y, inGap: false, inCoop: false };
+                if (minPush === pushRight) return { x: this.barrierRight + radius, y, inGap: false, inCoop: false };
+                if (minPush === pushTop) return { x, y: this.barrierTop - radius, inGap: false, inCoop: false };
+                return { x, y: this.barrierBottom + radius, inGap: false, inCoop: false };
+            }
+            
+            // Push entity out along the vector from closest point to entity center
+            const pushDist = radius - dist;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            
+            return {
+                x: x + nx * pushDist,
+                y: y + ny * pushDist,
+                inGap: false,
+                inCoop: false
+            };
+        }
+
+        // No collision
+        return { x, y, inGap: false, inCoop: false };
+    }
+
+    /**
+     * Legacy compatibility: isInsideFence now checks rectangular barrier
+     */
+    isInsideFence(x, y) {
+        return this.isInsideBarrier(x, y);
+    }
+
+    /**
+     * Legacy compatibility: isInGap now checks door
+     */
+    isInGap(x, y) {
+        return this.isInDoor(x, y);
+    }
+
+    /**
+     * Check if a chicken is at the escape door
+     */
+    isAtEscapeGap(chicken) {
+        const dx = Math.abs(chicken.x - this.x);
+        const dy = Math.abs(chicken.y - this.doorY);
+        return dx < this.doorWidth / 2 + 10 && dy < 20;
+    }
+
+    /**
+     * Check if hero is near the coop for deposit
+     */
+    isAtDepositZone(hero) {
+        const dist = Math.hypot(hero.x - this.x, hero.y - this.y);
+        return dist < this.fenceRadius + 20;
+    }
+
+    /**
+     * Legacy stub - no fence segments needed for rectangular barrier
      */
     getFenceSegments() {
-        if (typeof Collision === 'undefined' || !Collision.getFenceSegments) {
-            console.error('Collision.getFenceSegments is not available');
-            return [];
-        }
-        return Collision.getFenceSegments(this);
-    }
-    
-    isInsideFence(x, y) {
-        const dx = x - this.x;
-        const dy = y - this.y;
-        return Math.sqrt(dx * dx + dy * dy) < this.fenceRadius;
-    }
-    
-    isInGap(x, y) {
-        const dx = x - this.x;
-        const dy = y - this.y;
-        const angle = Math.atan2(dy, dx);
-        return this.isAngleInGap(angle);
-    }
-    
-    pushOutside(x, y, radius, hero) {
-        // STEP 1: Input validation
-        if (!this.isValidPosition(x, y)) {
-            // Return safe default - push to south side of fence
-            const safeAngle = Math.PI / 2;  // South
-            const safeDist = this.fenceRadius + radius + 10;
-            this.logPositionCorruption('pushOutside input', {x, y}, {
-                x: this.x + Math.cos(safeAngle) * safeDist,
-                y: this.y + Math.sin(safeAngle) * safeDist
-            });
-            return {
-                x: this.x + Math.cos(safeAngle) * safeDist,
-                y: this.y + Math.sin(safeAngle) * safeDist,
-                inGap: false,
-                inCoop: false
-            };
-        }
-
-        const dx = x - this.x;
-        const dy = y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx);
-
-        const hasBasket = hero && hero.hasTool && hero.hasTool('eggBasket');
-
-        // STEP 2: Gap detection with epsilon tolerance
-        const EPSILON = 0.02;  // ~1.15 degrees tolerance
-        const normalizedAngle = this.normalizeAngle(angle);
-
-        const inChickenGap = this.isAngleInGapWithTolerance(normalizedAngle,
-            this.chickenGapStart, this.chickenGapEnd, EPSILON);
-        const inPlayerGap = this.isAngleInGapWithTolerance(normalizedAngle,
-            this.playerGapStart, this.playerGapEnd, EPSILON);
-        const inAnyGap = inChickenGap || inPlayerGap;
-
-        // SOUTH-END BARRIER ONLY: Only apply barrier on south side
-        // South side is angles between π/4 (45°) and 3π/4 (135°)
-        const isSouthSide = normalizedAngle > Math.PI * 0.25 && normalizedAngle < Math.PI * 0.75;
-
-        // If not on south side, no barrier - free movement
-        if (!isSouthSide) {
-            // Check if inside coop area for tool interactions
-            const inCoopArea = dist < this.fenceRadius;
-            return {
-                x,
-                y,
-                inGap: false,
-                inCoop: inCoopArea && inAnyGap
-            };
-        }
-
-        // STEP 3: Handle fence collision with zero-distance protection (SOUTH SIDE ONLY)
-        if (dist < this.fenceRadius - radius) {
-            // Inside the fence on south side
-            if (hasBasket && inPlayerGap) {
-                return { x, y, inGap: true, inCoop: true };
-            }
-
-            if (inAnyGap) {
-                return { x, y, inGap: true, inCoop: false };
-            }
-
-            // Push to fence edge - PROTECTED from division by zero
-            if (dist < 0.001) {
-                // Too close to center, push south
-                const fallbackAngle = Math.PI / 2;
-                const targetDist = this.fenceRadius - radius;
-                return {
-                    x: this.x + Math.cos(fallbackAngle) * targetDist,
-                    y: this.y + Math.sin(fallbackAngle) * targetDist,
-                    inGap: false,
-                    inCoop: false
-                };
-            }
-
-            const targetDist = this.fenceRadius - radius;
-            const newX = this.x + (dx / dist) * targetDist;
-            const newY = this.y + (dy / dist) * targetDist;
-
-            // Validate output
-            if (!this.isValidPosition(newX, newY)) {
-                this.logPositionCorruption('pushOutside calculation', {x: newX, y: newY}, {x, y});
-                return { x, y, inGap: false, inCoop: false };  // Return original as fallback
-            }
-
-            return {
-                x: newX,
-                y: newY,
-                inGap: false,
-                inCoop: false
-            };
-        }
-
-        // Outside or at fence boundary
-        const result = {
-            x,
-            y,
-            inGap: inAnyGap && dist < this.fenceRadius + radius,
-            inCoop: false
-        };
-
-        // Final validation
-        if (!this.isValidPosition(result.x, result.y)) {
-            this.logPositionCorruption('pushOutside final', result, {x, y});
-            return { x, y, inGap: false, inCoop: false };
-        }
-
-        return result;
-    }
-
-    // Check if a chicken is at the escape gap
-    isAtEscapeGap(chicken) {
-        const dx = chicken.x - this.x;
-        const dy = chicken.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx);
-
-        const nearFence = Math.abs(dist - this.fenceRadius) < 20;
-        const inChickenGap = this.isAngleInChickenGap(angle);
-
-        return nearFence && inChickenGap;
-    }
-    
-    isAtDepositZone(hero) {
-        const dx = hero.x - this.x;
-        const dy = hero.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx);
-
-        const nearFence = Math.abs(dist - this.fenceRadius) < hero.radius + 10;
-        const inPlayerGap = this.isAngleInPlayerGap(angle);
-
-        return nearFence && inPlayerGap;
+        return [];
     }
 
     // REMOVED: drawDepositHint no longer needed - coop entry is now automatic
@@ -1204,18 +1012,16 @@ class Coop {
     //     ...
     // }
     
-    // Check egg collection when hero is inside coop with basket
+    // Check egg collection when hero is near coop with basket
     checkEggCollection(hero, basket) {
         const collected = [];
         
         if (!basket || basket.eggs >= basket.maxEggs) return collected;
         
-        // Check if hero is inside coop
-        const dx = hero.x - this.x;
-        const dy = hero.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        // Check if hero is near coop (within deposit range)
+        const dist = Math.hypot(hero.x - this.x, hero.y - this.y);
         
-        if (dist >= this.fenceRadius - hero.radius) return collected;
+        if (dist >= this.fenceRadius + 20) return collected;
         
         // Find nearby chickens with eggs
         this.chickens.forEach(chicken => {
@@ -1236,18 +1042,16 @@ class Coop {
         return collected;
     }
     
-    // Check feeding when hero is inside coop with food basket
+    // Check feeding when hero is near coop with food basket
     checkFeeding(hero, foodBasket) {
         const fed = [];
         
         if (!foodBasket || foodBasket.usesRemaining <= 0) return fed;
         
-        // Check if hero is inside coop
-        const dx = hero.x - this.x;
-        const dy = hero.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        // Check if hero is near coop
+        const dist = Math.hypot(hero.x - this.x, hero.y - this.y);
         
-        if (dist >= this.fenceRadius - hero.radius) return fed;
+        if (dist >= this.fenceRadius + 20) return fed;
         
         // Find nearby hungry chickens
         this.chickens.forEach(chicken => {

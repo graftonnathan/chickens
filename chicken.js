@@ -262,10 +262,9 @@ class Chicken {
     }
 
     updateEscaping(deltaTime, coop) {
-        // Move toward chicken escape gap
-        const escapeAngle = (coop.chickenGapStart + coop.chickenGapEnd) / 2;
-        const exitX = coop.x + Math.cos(escapeAngle) * coop.fenceRadius;
-        const exitY = coop.y + Math.sin(escapeAngle) * coop.fenceRadius;
+        // Move toward the coop door on the south wall
+        const exitX = coop.x;  // Door is centered on the coop
+        const exitY = coop.barrierBottom + 10;  // Just past the door
 
         const dx = exitX - this.x;
         const dy = exitY - this.y;
@@ -299,10 +298,9 @@ class Chicken {
         this.escapeTimerStart = null;
         this.escapeWarningTriggered = false;
 
-        // Place outside coop
-        const escapeAngle = (coop.chickenGapStart + coop.chickenGapEnd) / 2;
-        this.x = coop.x + Math.cos(escapeAngle) * (coop.fenceRadius + 40);
-        this.y = coop.y + Math.sin(escapeAngle) * (coop.fenceRadius + 40);
+        // Place just outside the coop door
+        this.x = coop.x;
+        this.y = coop.barrierBottom + 20;
 
         return 'escaped';
     }
@@ -338,10 +336,10 @@ class Chicken {
     }
     
     updateIdleMovement(deltaTime) {
-        // Random idle movement within coop
+        // Random idle movement within coop rectangular bounds
         if (Math.random() < 0.01) {
-            this.targetX = 400 + (Math.random() - 0.5) * 60;
-            this.targetY = 80 + (Math.random() - 0.5) * 60;
+            this.targetX = 340 + Math.random() * 120;  // Within coop width
+            this.targetY = 100 + Math.random() * 80;   // Within coop height
         }
         
         // Move toward target
@@ -440,11 +438,9 @@ class Chicken {
         this.coopResidency.coopId = coop.id || 'main';
         this.coopResidency.entryTime = Date.now() / 1000;
 
-        // Position in coop
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 15 + Math.random() * (coop.fenceRadius - 30);
-        this.x = coop.x + Math.cos(angle) * dist;
-        this.y = coop.y + Math.sin(angle) * dist;
+        // Position inside the coop rectangle
+        this.x = coop.x - coop.width / 2 + 20 + Math.random() * (coop.width - 40);
+        this.y = coop.y + 50 + Math.random() * 50;
 
         return true;
     }
