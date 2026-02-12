@@ -1,0 +1,37 @@
+{
+  "name": "chickens-wizards-backyard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chickens: Wizard's Backyard - A vanilla JS browser game",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:debug": "npx playwright test --debug",
+    "test:all": "vitest run && npx playwright test",
+    "lint": "eslint *.js",
+    "lint:fix": "eslint *.js --fix",
+    "format": "prettier --check \"*.js\" \"tests/**/*.js\"",
+    "format:fix": "prettier --write \"*.js\" \"tests/**/*.js\"",
+    "serve": "serve . -l 5500 --no-clipboard",
+    "check": "eslint *.js && prettier --check \"*.js\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.58.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "jsdom": "^27.0.1",
+    "playwright": "^1.58.2",
+    "prettier": "^3.8.1",
+    "serve": "^14.2.5",
+    "vitest": "^3.2.4"
+  }
+}

@@ -11,6 +11,12 @@ class FenceHole {
         this.createdAt = Date.now();
         this.repairProgress = 0; // 0-100
         this.isBeingRepaired = false;
+
+        // Chicken leak system — unrepaired holes cause chickens to escape
+        this.leakTimer = 0;
+        this.leakInterval = 20;        // Seconds between leaks
+        this.leakWarningTime = 5;      // Seconds of warning before leak
+        this.isLeaking = false;        // True when a leak event fires
         
         // Random debris rotation for visual variety
         this.debrisRotations = [
@@ -19,6 +25,30 @@ class FenceHole {
             Math.random() * 0.5 - 0.25,
             Math.random() * 0.5 - 0.25
         ];
+    }
+
+    // Update leak timer — returns true when a chicken should leak through
+    update(deltaTime) {
+        if (this.isBeingRepaired) return false;
+
+        this.leakTimer += deltaTime;
+
+        if (this.leakTimer >= this.leakInterval) {
+            this.leakTimer = 0;       // Reset for next leak cycle
+            this.isLeaking = true;
+            return true;               // Signal: a chicken should escape through this hole
+        }
+
+        this.isLeaking = false;
+        return false;
+    }
+
+    getLeakProgress() {
+        return this.leakTimer / this.leakInterval;
+    }
+
+    isLeakWarning() {
+        return this.leakTimer >= (this.leakInterval - this.leakWarningTime);
     }
 
     draw(ctx) {
@@ -32,6 +62,7 @@ class FenceHole {
         if (this.isBeingRepaired) {
             this.drawRepairProgress(ctx);
         }
+
     }
 
     drawBrokenFence(ctx) {
@@ -121,6 +152,48 @@ class FenceHole {
         ctx.fillText('REPAIRING...', this.x, barY - 5);
     }
 
+    drawLeakWarning(ctx) {
+        const progress = this.getLeakProgress();
+        const barWidth = 36;
+        const barHeight = 5;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - 30;
+
+        ctx.save();
+
+        // Leak countdown bar (always visible once hole exists)
+        // Background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        // Progress fill — turns red as it approaches leak
+        const isWarning = this.isLeakWarning();
+        if (isWarning) {
+            // Pulse red when close to leaking
+            const pulse = Math.sin(Date.now() / 150) * 0.3 + 0.7;
+            ctx.fillStyle = `rgba(255, 50, 50, ${pulse})`;
+        } else {
+            ctx.fillStyle = '#ff9800';  // Orange for normal countdown
+        }
+        ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+
+        // Border
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+        // Warning text when close to leaking
+        if (isWarning) {
+            const remaining = Math.ceil(this.leakInterval - this.leakTimer);
+            ctx.fillStyle = '#ff4444';
+            ctx.font = 'bold 9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`🐔 LEAK ${remaining}s`, this.x, barY - 3);
+        }
+
+        ctx.restore();
+    }
+
     // Check if point is in hole (escape zone)
     contains(x, y) {
         const dx = x - this.x;
@@ -188,6 +261,17 @@ class FenceHoleManager {
         return nearest;
     }
 
+    // Update all holes — returns array of holes that leaked a chicken
+    update(deltaTime) {
+        const leakingHoles = [];
+        this.holes.forEach(hole => {
+            if (hole.update(deltaTime)) {
+                leakingHoles.push(hole);
+            }
+        });
+        return leakingHoles;
+    }
+
     // Get hole count for UI
     getHoleCount() {
         return this.holes.length;
@@ -200,4 +284,8 @@ class FenceHoleManager {
     reset() {
         this.holes = [];
     }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { FenceHole, FenceHoleManager };
 }

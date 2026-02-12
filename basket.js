@@ -132,3 +132,7 @@ class HouseDepositZone {
         return { x: this.x, y: this.y, radius: this.radius };
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { BasketItem, HouseDepositZone };
+}

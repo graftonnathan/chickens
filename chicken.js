@@ -4,11 +4,12 @@
  */
 
 // Chicken type templates with attributes
+// Escape timers are staggered so multiple chickens create overlapping deadlines
 const CHICKEN_TYPE_TEMPLATES = {
     common: {
-        minCoopTime: 30,           // Seconds in coop before eligible to lay
+        minCoopTime: 25,           // Seconds in coop before eligible to lay
         foodThreshold: 50,          // Minimum hunger % to lay egg
-        escapeTimer: 45,            // Seconds egg sits before escape
+        escapeTimer: 30,            // Moderate window to collect egg
         hungerDecayRate: 2,         // Hunger lost per second
         eggValue: 10,
         color: '#ffffff',
@@ -16,9 +17,9 @@ const CHICKEN_TYPE_TEMPLATES = {
         label: 'Common'
     },
     fast: {
-        minCoopTime: 15,           // Lays quickly
+        minCoopTime: 12,           // Lays quickly
         foodThreshold: 60,
-        escapeTimer: 20,            // Escapes fast
+        escapeTimer: 12,            // Very short fuse — collect immediately
         hungerDecayRate: 4,         // Hungry often
         eggValue: 15,
         color: '#d2691e',
@@ -26,9 +27,9 @@ const CHICKEN_TYPE_TEMPLATES = {
         label: 'Fast'
     },
     slow: {
-        minCoopTime: 60,           // Takes time
+        minCoopTime: 50,           // Takes time
         foodThreshold: 40,
-        escapeTimer: 60,            // But stays put
+        escapeTimer: 50,            // Patient but not infinite
         hungerDecayRate: 1,
         eggValue: 20,
         color: '#808080',
@@ -36,9 +37,9 @@ const CHICKEN_TYPE_TEMPLATES = {
         label: 'Slow'
     },
     rare: {
-        minCoopTime: 90,           // Very long
-        foodThreshold: 80,          // Very hungry
-        escapeTimer: 10,            // Very fast escape
+        minCoopTime: 70,           // Very long to mature
+        foodThreshold: 80,          // Very hungry before laying
+        escapeTimer: 8,             // Ultra-short — high-value panic window
         hungerDecayRate: 5,
         eggValue: 50,
         color: '#ffd700',
@@ -46,10 +47,10 @@ const CHICKEN_TYPE_TEMPLATES = {
         label: 'Rare'
     },
     stubborn: {
-        minCoopTime: 30,
+        minCoopTime: 25,
         foodThreshold: 50,
-        escapeTimer: 90,            // Very patient
-        hungerDecayRate: 2,
+        escapeTimer: 45,            // Reliable but not forever
+        hungerDecayRate: 3,         // Gets hungrier than before
         eggValue: 12,
         color: '#2c2c2c',
         icon: '🛡️',
@@ -70,8 +71,9 @@ class Chicken {
         this.attributes = CHICKEN_TYPE_TEMPLATES[this.chickenType];
 
         // State machine
-        this.state = 'wild';        // wild, carried, in_coop, eligible_to_lay, laying, egg_waiting, escaping
+        this.state = 'wild';        // wild, carried, in_coop, eligible_to_lay, laying, egg_waiting, escaping, grabbed
         this.previousState = null;
+        this.inCoop = false;         // Shorthand for coop membership (synced with coopResidency.inCoop)
 
         // Coop residency tracking
         this.coopResidency = {
@@ -163,18 +165,30 @@ class Chicken {
                 return this.updateEggWaiting(deltaTime, coop);
             case 'escaping':
                 return this.updateEscaping(deltaTime, coop);
+            case 'grabbed':
+                // Position controlled by raccoon, don't update
+                return null;
         }
 
         return null;
     }
 
     updateWild(deltaTime) {
+        // Handle post-escape invulnerability and speed burst
+        if (this.escapeInvulnerable) {
+            this.escapeInvulnerableTimer -= deltaTime;
+            if (this.escapeInvulnerableTimer <= 0) {
+                this.escapeInvulnerable = false;
+                this.escapeInvulnerableTimer = 0;
+            }
+        }
+
         // Wandering behavior for wild chickens
         if (Math.random() < 0.01) {
             this.wanderAngle += (Math.random() - 0.5) * Math.PI;
         }
 
-        const speed = 20;
+        const speed = this.escapeInvulnerable ? 150 : 20;
         this.x += Math.cos(this.wanderAngle) * speed * deltaTime;
         this.y += Math.sin(this.wanderAngle) * speed * deltaTime;
 
@@ -191,7 +205,13 @@ class Chicken {
     }
 
     updateCarried(deltaTime) {
-        // Position follows player - handled by game/hero
+        if (this.carryTimer !== undefined && this.carryTimer !== null) {
+            this.carryTimer -= deltaTime;
+            if (this.carryTimer <= 0) {
+                this.carryTimer = null;
+                return 'escape_carry';
+            }
+        }
         return null;
     }
 
@@ -264,11 +284,18 @@ class Chicken {
     updateEscaping(deltaTime, coop) {
         // Move toward the coop door on the south wall
         const exitX = coop.x;  // Door is centered on the coop
-        const exitY = coop.barrierBottom + 10;  // Just past the door
+        const exitY = coop.visualBottom + 10;  // Just past the visual bottom of coop
 
         const dx = exitX - this.x;
         const dy = exitY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Keep hidden until past the visual bottom of the coop
+        if (this.y < coop.visualBottom) {
+            this.worldSpriteVisible = false;
+        } else {
+            this.worldSpriteVisible = true;
+        }
 
         if (dist > 5) {
             const escapeSpeed = this.baseMoveSpeed * 2;
@@ -291,6 +318,7 @@ class Chicken {
 
         // Reset to wild state
         this.state = 'wild';
+        this.inCoop = false;
         this.coopResidency.inCoop = false;
         this.coopResidency.coopId = null;
         this.coopResidency.entryTime = null;
@@ -300,7 +328,7 @@ class Chicken {
 
         // Place just outside the coop door
         this.x = coop.x;
-        this.y = coop.barrierBottom + 20;
+        this.y = coop.visualBottom + 20;
 
         return 'escaped';
     }
@@ -316,6 +344,7 @@ class Chicken {
         const coopId = this.coopResidency.coopId;
 
         // Clear coop residency (but don't remove from chickens array - coop.update handles that)
+        this.inCoop = false;
         this.coopResidency.inCoop = false;
         this.coopResidency.coopId = null;
         this.coopResidency.entryTime = null;
@@ -424,6 +453,8 @@ class Chicken {
 
         this.previousState = this.state;
         this.state = 'carried';
+        this.carryTimer = 5.0; // 5 seconds before escape
+        this.inCoop = false;
         this.coopResidency.inCoop = false;
         // Note: accumulated time is preserved in entryTime
         return true;
@@ -434,6 +465,7 @@ class Chicken {
         if (this.state !== 'carried') return false;
 
         this.state = 'in_coop';
+        this.inCoop = true;
         this.coopResidency.inCoop = true;
         this.coopResidency.coopId = coop.id || 'main';
         this.coopResidency.entryTime = Date.now() / 1000;
@@ -447,7 +479,7 @@ class Chicken {
 
     // Check if player can pick up this chicken
     canBePickedUp() {
-        return this.state === 'wild';
+        return this.state === 'wild' && !this.escapeInvulnerable;
     }
 
     // Check if player can catch this chicken (escaped wild chickens)
@@ -457,6 +489,83 @@ class Chicken {
         return dist < 40;
     }
     
+    // --- Color utility helpers ---
+    _darkenColor(hex, amount) {
+        const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - Math.floor(255 * amount));
+        const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - Math.floor(255 * amount));
+        const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - Math.floor(255 * amount));
+        return `rgb(${r},${g},${b})`;
+    }
+
+    _lightenColor(hex, amount) {
+        const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + Math.floor(255 * amount));
+        const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + Math.floor(255 * amount));
+        const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + Math.floor(255 * amount));
+        return `rgb(${r},${g},${b})`;
+    }
+
+    // --- State-dependent animation parameters ---
+    _getStateParams() {
+        const t = this.animTimer;
+        const isMoving = this.state === 'wild' || this.state === 'escaping';
+        const isCarried = this.state === 'carried' || this.state === 'grabbed';
+        const isScared = this.state === 'escaping';
+        const isIdle = this.state === 'idle' || this.state === 'in_coop' || this.state === 'eligible_to_lay' || this.state === 'egg_waiting';
+        const isLaying = this.state === 'laying';
+
+        // Body squash/stretch
+        let bodyScaleX = 1.0, bodyScaleY = 1.0;
+        if (isMoving) {
+            bodyScaleX = 1.0 + Math.sin(t * 8) * 0.04;
+            bodyScaleY = 1.0 - Math.sin(t * 8) * 0.04;
+        }
+        if (isScared) {
+            bodyScaleX = 0.9; bodyScaleY = 1.1; // Stretched upward
+        }
+        if (isCarried) {
+            bodyScaleX = 1.1; bodyScaleY = 0.85; // Squished
+        }
+        if (isLaying) {
+            bodyScaleX = 1.0 + Math.sin(t * 10) * 0.08;
+            bodyScaleY = 1.0 - Math.sin(t * 10) * 0.06;
+        }
+
+        // Head bob
+        let headBob = 0;
+        if (isMoving) headBob = Math.sin(t * 6) * 2;
+        if (isIdle) headBob = Math.sin(t * 2) * 0.8; // Gentle idle bob
+
+        // Leg animation (walking cycle)
+        let legPhase = 0;
+        if (isMoving) legPhase = t * 8;
+        if (isScared) legPhase = t * 12; // Faster when scared
+
+        // Wing flap
+        let wingAngle = 0;
+        if (isScared) wingAngle = Math.sin(t * 10) * 0.4;
+        else if (isMoving) wingAngle = Math.sin(t * 5) * 0.15;
+
+        // Beak open
+        let beakOpen = 0;
+        if (isScared) beakOpen = 3;
+        if (isLaying) beakOpen = 2 + Math.sin(t * 6) * 1;
+
+        // Eye state
+        let eyeScale = 1.0;
+        if (isScared) eyeScale = 1.5; // Wide eyes
+        if (isCarried) eyeScale = 1.3;
+
+        // Tail sway
+        let tailSway = Math.sin(t * 3) * 0.1;
+        if (isMoving) tailSway = Math.sin(t * 5) * 0.2;
+
+        return {
+            bodyScaleX, bodyScaleY, headBob, legPhase,
+            wingAngle, beakOpen, eyeScale, tailSway,
+            isMoving, isCarried, isScared, isIdle, isLaying
+        };
+    }
+
     draw(ctx) {
         // Skip drawing if world sprite should be hidden (shown in coop window instead)
         if (!this.worldSpriteVisible) return;
@@ -474,7 +583,7 @@ class Chicken {
             ctx.filter = 'hue-rotate(180deg) brightness(1.2)';
         }
 
-        // Draw chicken body
+        // Draw chicken body (illustrative overhaul)
         this.drawBody(ctx);
 
         // Draw state badge
@@ -503,15 +612,15 @@ class Chicken {
 
         ctx.restore();
     }
-    
+
     drawBody(ctx) {
         const hungerState = this.getHungerState();
 
         // Apply visual filters based on hunger
-        switch(hungerState) {
+        switch (hungerState) {
             case 'full':
             case 'satisfied':
-                ctx.globalAlpha = 1.0;
+                ctx.globalAlpha = Math.min(ctx.globalAlpha || 1.0, 1.0);
                 break;
             case 'hungry':
                 ctx.filter = 'brightness(0.85)';
@@ -524,86 +633,383 @@ class Chicken {
                 break;
         }
 
-        // Use chicken type color
         const bodyColor = this.attributes ? this.attributes.color : '#ffffff';
+        const darkColor = this._darkenColor(bodyColor, 0.2);
+        const lightColor = this._lightenColor(bodyColor, 0.2);
+        const sp = this._getStateParams();
+        const cx = this.x;
+        const cy = this.y;
 
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.15)';
-        ctx.beginPath();
-        ctx.ellipse(this.x, this.y + 10, 12, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // 1) Shadow — soft ellipse, scales with movement
+        this._drawShadow(ctx, cx, cy, sp);
 
-        // Body
-        ctx.fillStyle = bodyColor;
-        ctx.beginPath();
-        ctx.ellipse(this.x, this.y, 12, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // 2) Tail feathers — behind body
+        this._drawTailFeathers(ctx, cx, cy, bodyColor, darkColor, sp);
 
-        // Wing
-        ctx.fillStyle = bodyColor === '#ffffff' ? '#f5f5f5' : bodyColor;
-        ctx.beginPath();
-        ctx.ellipse(this.x - 5, this.y, 8, 5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // 3) Legs/Feet
+        this._drawLegs(ctx, cx, cy, sp);
 
-        // Head
-        ctx.fillStyle = bodyColor;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y - 8, 7, 0, Math.PI * 2);
-        ctx.fill();
+        // 4) Body — layered feather body
+        this._drawFeatheredBody(ctx, cx, cy, bodyColor, darkColor, lightColor, sp);
 
-        // Beak
-        ctx.fillStyle = '#ffa500';
-        ctx.beginPath();
-        ctx.moveTo(this.x + 5, this.y - 8);
-        ctx.lineTo(this.x + 12, this.y - 6);
-        ctx.lineTo(this.x + 5, this.y - 4);
-        ctx.closePath();
-        ctx.fill();
+        // 5) Wing
+        this._drawWing(ctx, cx, cy, bodyColor, darkColor, lightColor, sp);
 
-        // Eye
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(this.x + 3, this.y - 9, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Comb (red thing on head)
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y - 15, 4, Math.PI, 0);
-        ctx.fill();
-
-        // Legs
-        ctx.strokeStyle = '#ffa500';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(this.x - 5, this.y + 8);
-        ctx.lineTo(this.x - 5, this.y + 15);
-        ctx.moveTo(this.x + 5, this.y + 8);
-        ctx.lineTo(this.x + 5, this.y + 15);
-        ctx.stroke();
+        // 6) Neck + Head
+        this._drawHead(ctx, cx, cy, bodyColor, darkColor, lightColor, sp);
 
         ctx.restore(); // Restore filter
     }
-    
-    drawEggIndicator(ctx) {
-        // White egg above chicken
+
+    _drawShadow(ctx, cx, cy, sp) {
+        const shadowStretch = sp.isMoving ? 1.15 : 1.0;
+        ctx.fillStyle = 'rgba(0,0,0,0.13)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 12, 13 * shadowStretch, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    _drawTailFeathers(ctx, cx, cy, bodyColor, darkColor, sp) {
+        ctx.save();
+        ctx.translate(cx - 10, cy - 2);
+        ctx.rotate(-0.3 + sp.tailSway);
+        // 4 tail feathers as bezier curves fanning out
+        const featherColors = [darkColor, bodyColor, darkColor, bodyColor];
+        const angles = [-0.35, -0.15, 0.05, 0.25];
+        for (let i = 0; i < 4; i++) {
+            ctx.save();
+            ctx.rotate(angles[i]);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.bezierCurveTo(-4, -8, -8, -14, -3 + i * 1.5, -18);
+            ctx.bezierCurveTo(-1 + i, -14, 1, -7, 0, 0);
+            ctx.fillStyle = featherColors[i];
+            ctx.fill();
+            ctx.strokeStyle = darkColor;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    _drawLegs(ctx, cx, cy, sp) {
+        const legColor = '#e8a020';
+        const legDark = '#c08010';
+        // Left leg
+        const leftPhase = Math.sin(sp.legPhase) * 4;
+        const rightPhase = Math.sin(sp.legPhase + Math.PI) * 4;
+
+        // Carried state: legs dangle
+        if (sp.isCarried) {
+            this._drawDanglingLeg(ctx, cx - 4, cy + 8, legColor, legDark);
+            this._drawDanglingLeg(ctx, cx + 4, cy + 8, legColor, legDark);
+            return;
+        }
+
+        this._drawLeg(ctx, cx - 4, cy + 7, leftPhase, legColor, legDark);
+        this._drawLeg(ctx, cx + 4, cy + 7, rightPhase, legColor, legDark);
+    }
+
+    _drawLeg(ctx, lx, ly, phase, color, darkColor) {
+        // Upper leg (thicker)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx + phase * 0.3, ly + 5);
+        ctx.stroke();
+
+        // Lower leg (thinner)
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(lx + phase * 0.3, ly + 5);
+        ctx.lineTo(lx + phase * 0.6, ly + 10);
+        ctx.stroke();
+
+        // 3-toed foot
+        const footX = lx + phase * 0.6;
+        const footY = ly + 10;
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX - 2.5, footY + 3);
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX + 0.5, footY + 3.5);
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX + 3, footY + 2.5);
+        ctx.stroke();
+    }
+
+    _drawDanglingLeg(ctx, lx, ly, color, darkColor) {
+        const dangle = Math.sin(this.animTimer * 4) * 1.5;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.quadraticCurveTo(lx + dangle, ly + 5, lx + dangle * 0.5, ly + 10);
+        ctx.stroke();
+
+        // Dangling toes
+        const footX = lx + dangle * 0.5;
+        const footY = ly + 10;
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX - 2, footY + 2);
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX + 0.5, footY + 2.5);
+        ctx.moveTo(footX, footY);
+        ctx.lineTo(footX + 2.5, footY + 2);
+        ctx.stroke();
+    }
+
+    _drawFeatheredBody(ctx, cx, cy, bodyColor, darkColor, lightColor, sp) {
+        const sx = sp.bodyScaleX;
+        const sy = sp.bodyScaleY;
+
+        // Main body ellipse — bottom-heavy
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 1, 12 * sx, 10 * sy, 0, 0, Math.PI * 2);
+        // Gradient fill: lighter belly, darker back
+        const grad = ctx.createRadialGradient(cx + 3, cy + 4, 2, cx, cy, 12);
+        grad.addColorStop(0, lightColor);
+        grad.addColorStop(0.7, bodyColor);
+        grad.addColorStop(1, darkColor);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Subtle outline (hand-drawn feel — slight thickness variation)
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        // Breast feathers — 3 overlapping small ellipses (lighter)
+        ctx.fillStyle = lightColor;
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * 0.5;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.ellipse(
+                cx + 2 + i * 2, cy + 3 + i * 1.5,
+                4 * sx, 3 * sy, 0.2, 0, Math.PI * 2
+            );
+            ctx.fill();
+        }
+        ctx.globalAlpha = Math.min(1, (ctx.globalAlpha || 0.5) / 0.5);
+
+        // Feather texture strokes on body edge (curved ink-like strokes)
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 0.6;
+        for (let i = 0; i < 5; i++) {
+            const angle = -0.8 + i * 0.4;
+            const edgeX = cx + Math.cos(angle) * 11 * sx;
+            const edgeY = cy + Math.sin(angle) * 9 * sy;
+            ctx.beginPath();
+            ctx.moveTo(edgeX, edgeY);
+            ctx.quadraticCurveTo(
+                edgeX - 2, edgeY + 2,
+                edgeX - 3, edgeY + 4
+            );
+            ctx.stroke();
+        }
+    }
+
+    _drawWing(ctx, cx, cy, bodyColor, darkColor, lightColor, sp) {
+        ctx.save();
+        ctx.translate(cx - 6, cy + 1);
+        ctx.rotate(sp.wingAngle);
+
+        // Layered feather wing — 4 feather tips via bezier
+        const featherShades = [darkColor, bodyColor, lightColor, bodyColor];
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, -2 + i * 2);
+            ctx.bezierCurveTo(
+                -6, -4 + i * 2.5,
+                -10, -1 + i * 3,
+                -7, 3 + i * 2
+            );
+            ctx.bezierCurveTo(
+                -4, 2 + i * 1.5,
+                -1, 0 + i * 1,
+                0, -2 + i * 2
+            );
+            ctx.fillStyle = featherShades[i];
+            ctx.fill();
+            ctx.strokeStyle = darkColor;
+            ctx.lineWidth = 0.4;
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    _drawHead(ctx, cx, cy, bodyColor, darkColor, lightColor, sp) {
+        const headX = cx + 2;
+        const headY = cy - 9 + sp.headBob;
+
+        // Neck connection — small tapered shape
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 5);
+        ctx.quadraticCurveTo(cx + 2, cy - 7, headX, headY + 5);
+        ctx.quadraticCurveTo(cx + 4, cy - 7, cx + 3, cy - 4);
+        ctx.fill();
+
+        // Head shape — rounded
+        const headGrad = ctx.createRadialGradient(headX + 2, headY - 1, 1, headX, headY, 7);
+        headGrad.addColorStop(0, lightColor);
+        headGrad.addColorStop(1, bodyColor);
+        ctx.fillStyle = headGrad;
+        ctx.beginPath();
+        ctx.arc(headX, headY, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+
+        // Comb — 3-4 rounded bumps on top
+        this._drawComb(ctx, headX, headY);
+
+        // Wattle — small red drops beneath beak
+        this._drawWattle(ctx, headX, headY, sp);
+
+        // Beak — upper/lower mandible
+        this._drawBeak(ctx, headX, headY, sp);
+
+        // Eye — iris, pupil, highlight
+        this._drawEye(ctx, headX, headY, sp);
+    }
+
+    _drawComb(ctx, headX, headY) {
+        ctx.fillStyle = '#d63030';
+        const combGrad = ctx.createLinearGradient(headX - 4, headY - 14, headX + 4, headY - 10);
+        combGrad.addColorStop(0, '#e74c3c');
+        combGrad.addColorStop(1, '#c0392b');
+        ctx.fillStyle = combGrad;
+        // 3 bumps
+        ctx.beginPath();
+        ctx.arc(headX - 3, headY - 11, 2.5, Math.PI, 0);
+        ctx.arc(headX, headY - 12, 3, Math.PI, 0);
+        ctx.arc(headX + 3, headY - 11, 2.5, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#a93226';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+    }
+
+    _drawWattle(ctx, headX, headY, sp) {
+        // Two small red drops below beak
+        const wattleGrad = ctx.createLinearGradient(headX + 5, headY + 1, headX + 7, headY + 5);
+        wattleGrad.addColorStop(0, '#e74c3c');
+        wattleGrad.addColorStop(1, '#c0392b');
+        ctx.fillStyle = wattleGrad;
+        ctx.beginPath();
+        ctx.ellipse(headX + 5, headY + 3, 1.5, 2.5, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(headX + 7, headY + 2.5, 1.2, 2, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    _drawBeak(ctx, headX, headY, sp) {
+        const beakGrad = ctx.createLinearGradient(headX + 5, headY - 3, headX + 12, headY);
+        beakGrad.addColorStop(0, '#f0a030');
+        beakGrad.addColorStop(1, '#e08020');
+
+        // Upper mandible
+        ctx.fillStyle = beakGrad;
+        ctx.beginPath();
+        ctx.moveTo(headX + 5, headY - 2);
+        ctx.quadraticCurveTo(headX + 10, headY - 3, headX + 12, headY - 1 - sp.beakOpen * 0.3);
+        ctx.quadraticCurveTo(headX + 9, headY - 0.5, headX + 5, headY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#c07018';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        // Lower mandible
+        ctx.fillStyle = '#d89030';
+        ctx.beginPath();
+        ctx.moveTo(headX + 5, headY);
+        ctx.quadraticCurveTo(headX + 9, headY + 0.5 + sp.beakOpen * 0.4, headX + 11, headY + 1 + sp.beakOpen * 0.5);
+        ctx.quadraticCurveTo(headX + 8, headY + 1, headX + 5, headY);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    _drawEye(ctx, headX, headY, sp) {
+        const eyeX = headX + 3;
+        const eyeY = headY - 1;
+        const r = 2 * sp.eyeScale;
+
+        // Eye white
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.ellipse(this.x, this.y - 25, 6, 8, 0, 0, Math.PI * 2);
+        ctx.ellipse(eyeX, eyeY, r * 1.1, r, 0, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Highlight
-        ctx.fillStyle = '#f0f0f0';
+
+        // Iris
+        ctx.fillStyle = '#2c1810';
         ctx.beginPath();
-        ctx.ellipse(this.x - 2, this.y - 27, 2, 3, -0.3, 0, Math.PI * 2);
+        ctx.arc(eyeX + 0.3, eyeY, r * 0.7, 0, Math.PI * 2);
         ctx.fill();
-        
+
+        // Pupil
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(eyeX + 0.5, eyeY, r * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight (top-right, light source)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(eyeX + 0.8, eyeY - r * 0.4, r * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawEggIndicator(ctx) {
+        const eggY = this.y - 25;
+
+        // Egg shape with gradient
+        ctx.save();
+        const wobble = this.state === 'laying' ? Math.sin(this.animTimer * 8) * 0.08 : 0;
+        ctx.translate(this.x, eggY);
+        ctx.rotate(wobble);
+
+        // Base egg with vertical gradient
+        const eggGrad = ctx.createLinearGradient(0, -8, 0, 8);
+        eggGrad.addColorStop(0, '#ffffff');
+        eggGrad.addColorStop(1, '#f5e6c8');
+        ctx.fillStyle = eggGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shadow curve on bottom-left
+        ctx.fillStyle = 'rgba(180,150,100,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(-2, 3, 4, 4, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight spot on top-right
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.ellipse(2, -3, 2, 2.5, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
         // Glow pulse
         const pulse = Math.sin(this.animTimer * 3) * 0.3 + 0.7;
         ctx.strokeStyle = `rgba(255, 255, 255, ${pulse})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(this.x, this.y - 25, 10, 0, Math.PI * 2);
+        ctx.arc(this.x, eggY, 10, 0, Math.PI * 2);
         ctx.stroke();
     }
     
@@ -633,7 +1039,8 @@ class Chicken {
             'eligible_to_lay': { text: '⏳ WAITING', color: '#f1c40f' },
             'laying': { text: '🥚 LAYING', color: '#ffd700' },
             'egg_waiting': { text: '⚠️ EGG', color: '#ff9800' },
-            'escaping': { text: '🏃 ESCAPE', color: '#e74c3c' }
+            'escaping': { text: '🏃 ESCAPE', color: '#e74c3c' },
+            'grabbed': { text: '🦝 GRABBED', color: '#ff0000' }
         };
 
         const config = stateConfig[this.state];
@@ -724,4 +1131,8 @@ class Chicken {
     getBounds() {
         return { x: this.x, y: this.y, radius: this.radius };
     }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { CHICKEN_TYPE_TEMPLATES, Chicken };
 }

@@ -193,3 +193,77 @@ You are a wizard collecting magical chickens in your backyard. Catch chickens an
 ---
 
 *This document is the source of truth. Update it when adding permanent features.*
+
+---
+
+## TESTING INFRASTRUCTURE
+
+### Test Stack
+
+| Tool | Purpose |
+|------|---------|
+| **Vitest** | Unit and integration tests — fast, ESM-native, jsdom environment |
+| **Playwright** | End-to-end browser tests — real Chromium, serves the game via `npx serve .` |
+
+### Running Tests
+
+```bash
+# Unit + integration tests (Vitest)
+npm test              # Single run
+npm run test:watch    # Watch mode (re-runs on save)
+npm run test:coverage # With code coverage report
+
+# E2E browser tests (Playwright)
+npm run test:e2e          # Headless Chromium
+npm run test:e2e:headed   # Visible browser window
+npm run test:e2e:debug    # Playwright inspector
+
+# All tests
+npm run test:all      # Vitest + Playwright sequentially
+```
+
+### Test Structure
+
+```
+tests/
+├── setup.js                          # Vitest global setup (jsdom, canvas mock)
+├── helpers/
+│   └── canvasMock.js                 # Mock Canvas 2D context for Vitest
+├── unit/                             # Pure logic tests (no DOM, no side effects)
+│   ├── collision.test.js             # Hit detection, spatial queries
+│   ├── depthManager.test.js          # Y-sort depth, roof occlusion
+│   ├── chickenTypes.test.js          # Chicken type templates, typed chickens
+│   └── input.test.js                 # Keyboard handler, key bindings
+├── integration/                      # Entity interaction tests (mocked canvas)
+│   ├── hero-chicken.test.js          # Hero catching/carrying chickens
+│   ├── hero-coop.test.js             # Hero depositing at coop
+│   ├── chicken-spawner.test.js       # Chicken spawning, type distribution
+│   └── raccoon-coop.test.js          # Raccoon stealing from coop
+└── e2e/                              # Browser tests (real Chromium via Playwright)
+    └── game.spec.js                  # Game loading, UI, canvas rendering, input
+```
+
+### Test Count
+
+- **Vitest:** 357+ tests across unit and integration suites
+- **Playwright E2E:** 29 passing specs (+ 1 skipped game-over trigger)
+- **Total:** 386+ automated tests
+
+### Adding New Tests
+
+1. **Unit tests** — For pure logic without DOM dependencies. Place in `tests/unit/<module>.test.js`. Import via conditional `module.exports` at bottom of source files.
+2. **Integration tests** — For interactions between multiple game entities. Place in `tests/integration/<scenario>.test.js`. Use the canvas mock from `tests/helpers/canvasMock.js`.
+3. **E2E tests** — For browser-level behaviour. Place in `tests/e2e/<scenario>.spec.js`. Tests run against the real game served on `localhost:5500`.
+
+### Module Exports (Dual-Mode Pattern)
+
+Source files use a conditional export footer so they work both as browser `<script>` globals and as Node/Vitest modules:
+
+```js
+// --- END OF FILE ---
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ClassName };
+}
+```
+
+The browser ignores this block (no `module` global). Vitest picks it up via `require()`. **Do not remove these footers** — they are required for the test infrastructure to work.
