@@ -1,0 +1,109 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Test: Run All",
+            "type": "shell",
+            "command": "npx vitest run",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test: Watch Mode",
+            "type": "shell",
+            "command": "npx vitest",
+            "group": "test",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Test: Coverage",
+            "type": "shell",
+            "command": "npx vitest run --coverage",
+            "group": "test",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test: E2E (Playwright)",
+            "type": "shell",
+            "command": "npx playwright test",
+            "group": "test",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Dev Server",
+            "type": "shell",
+            "command": "npx serve . -l 5500 --no-clipboard",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Lint: Check",
+            "type": "shell",
+            "command": "npx eslint *.js",
+            "group": "build",
+            "problemMatcher": ["$eslint-stylish"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Lint: Fix",
+            "type": "shell",
+            "command": "npx eslint *.js --fix",
+            "group": "build",
+            "problemMatcher": ["$eslint-stylish"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Format: Check",
+            "type": "shell",
+            "command": "npx prettier --check *.js",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Format: Fix",
+            "type": "shell",
+            "command": "npx prettier --write *.js",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}

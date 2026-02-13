@@ -123,3 +123,7 @@ class EggManager {
         this.spawnTimer = 0;
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Egg, EggManager };
+}

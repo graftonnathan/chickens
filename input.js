@@ -95,3 +95,7 @@ class InputHandler {
         this.justPressed = {};
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { InputHandler };
+}

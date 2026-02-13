@@ -124,16 +124,21 @@ class Game {
     checkProximityInteractions() {
         const hero = this.hero;
 
-        // 1. Auto-enter coop when carrying feed basket or egg basket
+        // 1. Auto-enter coop when carrying egg basket (food basket now auto-feeds)
         const foodBasket = hero.getTool('foodBasket');
         const eggBasket = hero.getTool('eggBasket');
 
-        if ((foodBasket || eggBasket) && !hero.inCoop) {
-            // Check if hero is at player gap entrance
+        if (eggBasket && !hero.inCoop) {
             if (this.coop.isAtDepositZone(hero)) {
-                // Auto-enter coop without requiring 'E' press
                 hero.enterCoop();
                 this.addBonusText(hero.x, hero.y - 30, 'Entered Coop');
+            }
+        }
+
+        // 1b. Auto-feed: when carrying food basket near coop door, start feed channel
+        if (foodBasket && foodBasket.usesRemaining > 0 && !hero.isChanneling()) {
+            if (this.coop.isAtDepositZone(hero)) {
+                hero.startFeeding(this.coop); // Target is the coop, not a specific chicken
             }
         }
 
@@ -158,16 +163,12 @@ class Game {
             }
         }
 
-        // 4. Auto-deposit to coop (deposit all carried chickens)
-        if (hero.isCarrying()) {
-            const distToCoop = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.y);
-            if (distToCoop < hero.ranges.depositRadius && this.coop.chickens.length < this.coop.maxChickens) {
-                // Deposit all chickens (will deposit as many as coop can hold)
-                const depositedCount = hero.depositAllChickens(this.coop);
-                if (depositedCount > 0) {
-                    this.addBonusText(hero.x, hero.y - 30, `+${depositedCount} DEPOSITED`);
-                    this.particles.spawn(hero.x, hero.y, 'poof', 10 * depositedCount);
-                }
+        // 4. Auto-deposit to coop via channeled deposit (hero must stand still)
+        if (hero.isCarrying() && !hero.isDepositing) {
+            const distToDoor = Math.hypot(hero.x - this.coop.x, hero.y - this.coop.doorY);
+            if (distToDoor < hero.ranges.depositRadius + 20 && this.coop.chickens.length < this.coop.maxChickens) {
+                // Begin channeled deposit (hero must stand still)
+                hero.startDeposit(this.coop);
             }
         }
     }
@@ -223,7 +224,7 @@ class Game {
         // Update hero
         this.hero.update(deltaTime, this.input, this.coop.chickens, this.particles);
 
-        // Fence collision - coop boundary
+        // Fence collision - coop barrier (rectangular)
         const fenceResult = this.coop.pushOutside(this.hero.x, this.hero.y, this.hero.radius, this.hero);
 
         // Validate fenceResult before applying
@@ -233,49 +234,15 @@ class Game {
             Number.isFinite(fenceResult.x) &&
             Number.isFinite(fenceResult.y)) {
 
-            if (!fenceResult.inCoop) {
-                this.hero.x = fenceResult.x;
-                this.hero.y = fenceResult.y;
-            }
+            this.hero.x = fenceResult.x;
+            this.hero.y = fenceResult.y;
         } else {
             console.error('[Game] Invalid fenceResult:', fenceResult);
-            // Don't update hero position if result is invalid
         }
 
         // Auto-exit coop when walking outside
         if (this.hero.inCoop && !fenceResult.inCoop && !fenceResult.inGap) {
             this.hero.exitCoop();
-        }
-
-        // Additional fence segment collision (prevents walking through fence)
-        // Only check if hero is outside the coop (inside uses pushOutside)
-        if (!fenceResult?.inCoop) {
-            const heroBounds = {
-                x: this.hero.x,
-                y: this.hero.y,
-                radius: this.hero.radius
-            };
-
-            // Get fence segments WITH hole awareness
-            const segments = this.coop.getFenceSegments(this.fenceHoleManager);
-
-            // Check each solid fence segment
-            for (const segment of segments) {
-                if (segment.isGap) continue; // Skip gaps
-
-                const corrected = Collision.resolveCircleSegmentCollision(heroBounds, segment);
-                if (corrected) {
-                    // Validate corrected position
-                    if (Number.isFinite(corrected.x) && Number.isFinite(corrected.y)) {
-                        this.hero.x = corrected.x;
-                        this.hero.y = corrected.y;
-                        heroBounds.x = corrected.x;
-                        heroBounds.y = corrected.y;
-                    } else {
-                        console.error('[Game] Invalid collision correction:', corrected);
-                    }
-                }
-            }
         }
 
         // Update wild chickens (wandering)
@@ -294,6 +261,15 @@ class Game {
 
         // Automatic proximity interactions (pickup/deposit)
         this.checkProximityInteractions();
+
+        // Update deposit channel (hero must stand still to deposit each chicken)
+        if (this.hero.isDepositing) {
+            const depositedChicken = this.hero.updateDeposit(deltaTime);
+            if (depositedChicken) {
+                this.addBonusText(this.hero.x, this.hero.y - 30, '+1 DEPOSITED');
+                this.particles.spawn(this.hero.x, this.hero.y, 'poof', 10);
+            }
+        }
 
         // Update tools
         this.toolManager.update(deltaTime);
@@ -321,53 +297,72 @@ class Game {
             }
         }
 
-        // E key interactions inside coop
-        if (this.input.isInteractPressed()) {
+        // E key starts channeled egg collection (not instant)
+        if (this.input.isInteractPressed() && !this.hero.isChanneling()) {
             const eggBasket = this.hero.getTool('eggBasket');
-            const foodBasket = this.hero.getTool('foodBasket');
 
-            // Egg collection - find nearby chickens with eggs
+            // Egg collection - start channel on nearest chicken with egg
             if (eggBasket && eggBasket.canCollect()) {
-                let collected = 0;
+                let nearest = null;
+                let nearestDist = Infinity;
 
                 for (const chicken of this.coop.chickens) {
                     if (chicken.hasEgg) {
                         const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
-                        if (dist < 50 && eggBasket.canCollect()) {
-                            const result = chicken.collectEgg();
-                            if (result) {
-                                eggBasket.collectEgg();
-                                collected++;
-                                this.particles.spawn(chicken.x, chicken.y, 'sparkle', 5);
-                            }
+                        if (dist < 50 && dist < nearestDist) {
+                            nearestDist = dist;
+                            nearest = chicken;
                         }
                     }
                 }
 
-                if (collected > 0) {
-                    this.addBonusText(this.hero.x, this.hero.y - 30, `+${collected} 🥚`);
+                if (nearest) {
+                    this.hero.startCollecting(nearest);
                 }
             }
+        }
 
-            // Feeding - find nearby hungry chickens
-            if (foodBasket && foodBasket.usesRemaining > 0) {
-                let fed = 0;
-
-                for (const chicken of this.coop.chickens) {
-                    if (chicken.hunger < 80) {
-                        const dist = Math.hypot(chicken.x - this.hero.x, chicken.y - this.hero.y);
-                        if (dist < 50 && foodBasket.usesRemaining > 0) {
+        // Update feeding channel — dumps all food, feeds ALL hungry chickens, empties basket
+        if (this.hero.isFeeding) {
+            const feedResult = this.hero.updateFeeding(deltaTime);
+            if (feedResult) {
+                const foodBasket = this.hero.getTool('foodBasket');
+                if (foodBasket) {
+                    // Feed all hungry chickens in the coop at once
+                    let fed = 0;
+                    for (const chicken of this.coop.chickens) {
+                        if (chicken.hunger < 80) {
                             chicken.feed();
-                            foodBasket.use();
                             fed++;
-                            this.addBonusText(chicken.x, chicken.y - 40, '❤');
                             this.particles.spawn(chicken.x, chicken.y, 'heart', 3);
                         }
                     }
-                }
 
-                if (foodBasket.isEmpty()) {
+                    // Empty the basket completely
+                    foodBasket.usesRemaining = 0;
+
+                    if (fed > 0) {
+                        this.addBonusText(this.hero.x, this.hero.y - 30, `🌾 FED ${fed} CHICKENS`);
+                    }
+
+                    // Drop empty basket
                     this.hero.dropTool('foodBasket');
+                }
+            }
+        }
+
+        // Update egg collection channel
+        if (this.hero.isCollecting) {
+            const collectedChicken = this.hero.updateCollecting(deltaTime);
+            if (collectedChicken) {
+                const eggBasket = this.hero.getTool('eggBasket');
+                if (eggBasket && eggBasket.canCollect() && collectedChicken.hasEgg) {
+                    const result = collectedChicken.collectEgg();
+                    if (result) {
+                        eggBasket.collectEgg();
+                        this.addBonusText(this.hero.x, this.hero.y - 30, '+1 🥚');
+                        this.particles.spawn(collectedChicken.x, collectedChicken.y, 'sparkle', 5);
+                    }
                 }
             }
         }
@@ -405,14 +400,57 @@ class Game {
                 this.fenceHoleManager.removeHole(repairedHole);
                 this.addBonusText(this.hero.x, this.hero.y - 50, '+REPAIR');
                 const hammer = this.hero.getTool('hammer');
-                if (hammer && hammer.isEmpty()) {
-                    this.hero.dropTool('hammer');
+                if (hammer) {
+                    hammer.use();
+                    if (hammer.isEmpty()) {
+                        this.hero.dropTool('hammer');
+                    }
                 }
             }
         }
         
         // Update raccoons
         this.updateRaccoons(deltaTime);
+
+        // Update fence holes — unrepaired holes leak chickens directly to wild
+        const leakingHoles = this.fenceHoleManager.update(deltaTime);
+        for (const hole of leakingHoles) {
+            // Force a random coop chicken to escape — they pop out of the coop door
+            const coopChickens = this.coop.chickens.filter(c => c.inCoop && c.state !== 'escaping');
+            if (coopChickens.length > 0) {
+                const victim = coopChickens[Math.floor(Math.random() * coopChickens.length)];
+
+                // Release window assignment so it shows as empty
+                this.coop.releaseWindowAssignment(victim.id);
+
+                // Remove from coop directly (skip escaping animation — they pop out at the door)
+                const idx = this.coop.chickens.indexOf(victim);
+                if (idx > -1) this.coop.chickens.splice(idx, 1);
+
+                // Reset chicken to wild
+                victim.state = 'wild';
+                victim.inCoop = false;
+                victim.coopResidency.inCoop = false;
+                victim.coopResidency.coopId = null;
+                victim.coopResidency.entryTime = null;
+                victim.hasEgg = false;
+                victim.escapeTimerStart = null;
+                victim.escapeWarningTriggered = false;
+                victim.assignedWindow = -1;
+                victim.worldSpriteVisible = true;
+
+                // Position at the coop door (south side), with slight random offset
+                victim.x = this.coop.x + (Math.random() - 0.5) * 40;
+                victim.y = this.coop.visualBottom + 20;
+
+                // Add to wild chickens
+                this.wildChickens.push(victim);
+                this.escapedChickens++;
+
+                this.addBonusText(this.coop.x, this.coop.visualBottom, '🐔 LEAKED!');
+                this.particles.spawn(this.coop.x, this.coop.visualBottom, 'escape', 8);
+            }
+        }
 
         // Handle E key interactions
         this.handleInteractions();
@@ -475,30 +513,8 @@ class Game {
             }
         }
 
-        // 3. Collect eggs with E if in coop with basket
-        const fenceResult = this.coop.pushOutside(hero.x, hero.y, hero.radius, hero);
-        if (fenceResult.inCoop || fenceResult.inGap) {
-            const eggBasket = hero.getTool('eggBasket');
-            if (eggBasket && eggBasket.canCollect()) {
-                const chickens = this.chickenManager.getChickensWithEggs();
-                let collected = 0;
-
-                for (const chicken of chickens) {
-                    const dist = Math.hypot(chicken.x - hero.x, chicken.y - hero.y);
-                    if (dist < 50 && eggBasket.canCollect()) {
-                        if (chicken.collectEgg()) {
-                            eggBasket.collectEgg();
-                            collected++;
-                            this.particles.spawn(chicken.x, chicken.y, 'sparkle', 5);
-                        }
-                    }
-                }
-
-                if (collected > 0) {
-                    this.addBonusText(hero.x, hero.y - 30, `+${collected} 🥚`);
-                }
-            }
-        }
+        // 3. Egg collection and feeding now handled via channels in update()
+        //    (E key starts the channel, timer completes the action)
     }
 
     updateChickenCards() {
@@ -674,38 +690,163 @@ class Game {
         if (this.raccoonSpawner.update(deltaTime, this.raccoons)) {
             this.raccoons.push(this.raccoonSpawner.spawnRaccoon(this.fenceHoleManager, this.particles));
         }
-        
+
         // Update raccoons
         this.raccoons = this.raccoons.filter(raccoon => {
             raccoon.update(deltaTime, this.particles);
-            
-            // Check if hero intercepted raccoon
-            if (raccoon.state === 'moving' && 
+
+            // --- Hero intercepts raccoon while approaching or dragging ---
+            if ((raccoon.state === 'approaching' || raccoon.state === 'dragging') &&
                 Collision.circleCircle(this.hero.getBounds(), raccoon.getBounds())) {
-                raccoon.intercept(this.particles);
-                this.addBonusText(raccoon.x, raccoon.y, '+50');
-                
+
+                const droppedChicken = raccoon.intercept(this.particles);
+
+                if (droppedChicken) {
+                    // Chicken was dropped — make it wild again at current position
+                    droppedChicken.state = 'wild';
+                    droppedChicken.worldSpriteVisible = true;
+                    droppedChicken.inCoop = false;
+                    droppedChicken.coopResidency.inCoop = false;
+                    // Add to wild chickens so it can be picked up
+                    if (!this.wildChickens.includes(droppedChicken)) {
+                        this.wildChickens.push(droppedChicken);
+                    }
+                    this.addBonusText(raccoon.x, raccoon.y, 'SAVED! +50');
+                } else {
+                    this.addBonusText(raccoon.x, raccoon.y, 'SPOOKED! +50');
+                }
+
+                // Schedule removal after flee animation
                 setTimeout(() => {
                     this.raccoons = this.raccoons.filter(r => r !== raccoon);
                 }, 1000);
                 return true;
             }
-            
-            // Check if raccoon reached coop
-            if (raccoon.state === 'moving' && raccoon.checkReachedTarget()) {
-                // Spook the coop!
-                this.coop.spook();
-                this.addBonusText(this.coop.x, this.coop.y, 'SPOOKED!');
-                this.particles.spawn(this.coop.x, this.coop.y, 'escape', 15);
-                return false;
+
+            // --- Raccoon targets closest wild chicken while approaching ---
+            if (raccoon.state === 'approaching' && !raccoon.grabbedChicken) {
+                let closestWild = null;
+                let closestDist = Infinity;
+                for (const chicken of this.wildChickens) {
+                    if (chicken.state !== 'wild' && chicken.state !== 'escaping') continue;
+                    const dx = chicken.x - raccoon.x;
+                    const dy = chicken.y - raccoon.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closestWild = chicken;
+                    }
+                }
+
+                if (closestWild) {
+                    // Redirect raccoon toward nearest wild chicken
+                    raccoon.setDirectionToward(closestWild.x, closestWild.y);
+
+                    if (closestDist < 30) {
+                        // Grab this wild chicken!
+                        closestWild.state = 'grabbed';
+                        closestWild.worldSpriteVisible = false;
+                        raccoon.grabbedChicken = closestWild;
+
+                        // Skip coop — go straight to dragging
+                        raccoon.state = 'dragging';
+                        raccoon.findEscapeTarget();
+                        this.addBonusText(raccoon.x, raccoon.y, '🦝 SNATCHED!');
+                    }
+                } else {
+                    // No wild chickens — keep heading to coop door
+                    raccoon.setDirectionToward(raccoon.doorX, raccoon.doorY);
+                }
             }
-            
-            // Remove if escaped
-            if (raccoon.state === 'fleeing' && 
+
+            // --- Raccoon entered coop: spook chickens ---
+            if (raccoon.hasSpookedChickens && raccoon.state === 'inside_coop') {
+                raccoon.hasSpookedChickens = false; // Only trigger once
+
+                // Spook random number (0-6) of chickens out of the coop
+                const spookCount = raccoon.spookedCount;
+                let spooked = 0;
+                const coopChickens = this.coop.chickens.filter(c => c.inCoop);
+                for (let i = 0; i < coopChickens.length && spooked < spookCount; i++) {
+                    coopChickens[i].leaveCoop();
+                    spooked++;
+                }
+
+                if (spooked > 0) {
+                    this.addBonusText(this.coop.x, this.coop.y, `${spooked} SPOOKED!`);
+                    this.particles.spawn(this.coop.x, this.coop.y, 'escape', 10);
+                }
+
+                // Grab the closest chicken from the coop (if any remain)
+                const remaining = this.coop.chickens.filter(c => c.inCoop);
+                if (remaining.length > 0) {
+                    // Find closest chicken to raccoon's position (coop center)
+                    let closest = remaining[0];
+                    let closestDist = Infinity;
+                    for (const c of remaining) {
+                        const dx = c.x - raccoon.x;
+                        const dy = c.y - raccoon.y;
+                        const d = dx * dx + dy * dy;
+                        if (d < closestDist) {
+                            closestDist = d;
+                            closest = c;
+                        }
+                    }
+                    const victim = closest;
+                    // Mark chicken as grabbed
+                    victim.state = 'grabbed';
+                    victim.inCoop = false;
+                    victim.coopResidency.inCoop = false;
+                    victim.coopResidency.coopId = null;
+                    victim.coopResidency.entryTime = null;
+                    victim.hasEgg = false;
+                    victim.escapeTimerStart = null;
+                    victim.escapeWarningTriggered = false;
+                    victim.worldSpriteVisible = false; // Hidden — drawn by raccoon
+                    raccoon.grabbedChicken = victim;
+
+                    // Release window assignment
+                    this.coop.releaseWindowAssignment(victim.id);
+                }
+            }
+
+            // --- Raccoon started dragging: redirect to nearest fence hole ---
+            if (raccoon.state === 'dragging' && !raccoon._escapeHoleSet) {
+                raccoon._escapeHoleSet = true;
+                const nearestHole = this.fenceHoleManager.getNearestHole(raccoon.x, raccoon.y);
+                if (nearestHole && !nearestHole.isBeingRepaired) {
+                    raccoon.setEscapeHole(nearestHole);
+                }
+            }
+
+            // --- Raccoon escaped with chicken ---
+            if (raccoon.state === 'escaped') {
+                if (raccoon.grabbedChicken) {
+                    // Chicken is gone for the rest of the level
+                    const deadChicken = raccoon.grabbedChicken;
+                    deadChicken.worldSpriteVisible = false;
+                    deadChicken.state = 'dead';
+
+                    // Remove from all tracking arrays
+                    const coopIdx = this.coop.chickens.indexOf(deadChicken);
+                    if (coopIdx > -1) this.coop.chickens.splice(coopIdx, 1);
+                    const escIdx = this.coop.escapedChickens.indexOf(deadChicken);
+                    if (escIdx > -1) this.coop.escapedChickens.splice(escIdx, 1);
+                    const wildIdx = this.wildChickens.indexOf(deadChicken);
+                    if (wildIdx > -1) this.wildChickens.splice(wildIdx, 1);
+
+                    this.addBonusText(raccoon.x, raccoon.y, '🦝 CHICKEN LOST!');
+                    raccoon.grabbedChicken = null;
+                }
+                return false; // Remove raccoon
+            }
+
+            // --- Remove if fled off screen ---
+            if (raccoon.state === 'fleeing' &&
                 Collision.outsideBounds(raccoon.getBounds(), { left: -50, right: 850, top: -50, bottom: 650 })) {
                 return false;
             }
-            
+
             return true;
         });
     }
@@ -718,14 +859,8 @@ class Game {
         // Layer 0: Background (no roof)
         this.renderer.clear();
 
-        // Draw spawn warning (background layer)
-        if (this.state === 'playing' && this.raccoonSpawner.warningActive) {
-            this.drawSpawnWarning();
-        }
-
-        // Layer 1: Ground markers
-        this.toolManager.draw(this.ctx);
-        this.fenceHoleManager.draw(this.ctx);
+        // Draw coop structure (background layer - before entities)
+        this.coop.draw(this.ctx);
 
         // Layer 2: Y-sorted entities with roof overlay
         // Collect all entities that need depth sorting
@@ -760,13 +895,14 @@ class Game {
             this.renderer.drawRoofOverlay(this.ctx);
         }
 
+        // Ground markers drawn after roof so tools aren't hidden behind it
+        this.toolManager.draw(this.ctx);
+        this.fenceHoleManager.draw(this.ctx);
+
         // Draw all entities in front of the roof
         for (const entity of inFrontOfRoof) {
             entity.draw(this.ctx);
         }
-
-        // Draw coop (coop is a structure, not sorted with entities)
-        this.coop.draw(this.ctx);
 
         // Draw proximity hints
         this.drawProximityHints();
@@ -815,45 +951,21 @@ class Game {
                 this.ctx.save();
                 this.ctx.strokeStyle = '#2ecc71';
                 this.ctx.lineWidth = 3;
-                this.ctx.beginPath();
-                this.ctx.arc(this.coop.x, this.coop.y, this.coop.fenceRadius + 10, 0, Math.PI * 2);
-                this.ctx.stroke();
+                // Draw rectangle around coop barrier
+                this.ctx.strokeRect(
+                    this.coop.barrierLeft - 5,
+                    this.coop.barrierTop - 5,
+                    this.coop.barrierRight - this.coop.barrierLeft + 10,
+                    this.coop.barrierBottom - this.coop.barrierTop + 10
+                );
 
                 this.ctx.fillStyle = '#2ecc71';
                 this.ctx.font = 'bold 12px sans-serif';
                 this.ctx.textAlign = 'center';
-                this.ctx.fillText('DEPOSIT', this.coop.x, this.coop.y - this.coop.fenceRadius - 15);
+                this.ctx.fillText('DEPOSIT', this.coop.x, this.coop.barrierTop - 15);
                 this.ctx.restore();
             }
         }
-    }
-    
-    drawSpawnWarning() {
-        const progress = this.raccoonSpawner.getWarningProgress();
-        const alpha = 0.3 + progress * 0.5;
-        const pulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
-        
-        const positions = [
-            {x: 400, y: 20},
-            {x: 790, y: 300},
-            {x: 10, y: 300}
-        ];
-        
-        this.ctx.save();
-        positions.forEach(pos => {
-            this.ctx.globalAlpha = alpha * pulse;
-            this.ctx.fillStyle = '#ff0000';
-            this.ctx.beginPath();
-            this.ctx.arc(pos.x, pos.y, 25, 0, Math.PI * 2);
-            this.ctx.fill();
-            
-            this.ctx.globalAlpha = 1;
-            this.ctx.fillStyle = '#ff0000';
-            this.ctx.font = 'bold 14px monospace';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('!', pos.x, pos.y + 5);
-        });
-        this.ctx.restore();
     }
     
     drawBonusTexts() {
@@ -893,26 +1005,26 @@ class Game {
             timeEl.textContent = this.formatTime(this.gameTime);
         }
 
-        // Update bag display (tool carrying)
+        // Update bag display (2-slot hand system)
         const bagDisplay = document.getElementById('bagDisplay');
         if (bagDisplay) {
-            let slotText = '';
-
-            // Show current tool
-            if (this.hero.currentTool) {
-                const tool = this.hero.currentTool;
-                if (tool.type === 'eggBasket') {
-                    slotText = `🧺 ${tool.eggs}/${tool.maxEggs}`;
-                } else if (tool.type === 'foodBasket') {
-                    slotText = `🌾 ${tool.usesRemaining}/${tool.maxUses}`;
-                } else if (tool.type === 'hammer') {
-                    slotText = `🔨 ${tool.usesRemaining}/${tool.maxUses}`;
+            const hands = [this.hero.leftHand, this.hero.rightHand];
+            const slotTexts = hands.map((hand, i) => {
+                const label = i === 0 ? 'L' : 'R';
+                if (!hand) return `${label}:○`;
+                if (hand.type === 'chicken') {
+                    const chickenLabel = hand.item.attributes ? hand.item.attributes.label : '?';
+                    return `${label}:🐔${chickenLabel}`;
                 }
-            } else {
-                slotText = '○ (empty)';
-            }
-
-            bagDisplay.textContent = slotText;
+                if (hand.type === 'tool') {
+                    const tool = hand.item;
+                    if (tool.type === 'eggBasket') return `${label}:🧺${tool.eggs}/${tool.maxEggs}`;
+                    if (tool.type === 'foodBasket') return `${label}:🌾${tool.usesRemaining}/${tool.maxUses}`;
+                    if (tool.type === 'hammer') return `${label}:🔨${tool.usesRemaining}/${tool.maxUses}`;
+                }
+                return `${label}:?`;
+            });
+            bagDisplay.textContent = slotTexts.join(' ');
         }
     }
     
@@ -938,3 +1050,7 @@ class Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Game();
 });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Game };
+}

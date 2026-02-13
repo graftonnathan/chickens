@@ -54,3 +54,7 @@ class Spawner {
         this.maxChickens = 15;
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Spawner };
+}

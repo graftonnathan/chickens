@@ -6,6 +6,8 @@ class Tool {
     constructor(x, y, type) {
         this.x = x;
         this.y = y;
+        this.spawnX = x;   // Remember spawn position for respawn
+        this.spawnY = y;
         this.type = type; // 'eggBasket', 'hammer', 'foodBasket'
         this.pickedUp = false;
         this.radius = 20;
@@ -192,6 +194,9 @@ class Tool {
         this.eggs = 0;
         this.pickedUp = false;
         this.glowPhase = 0;
+        // Return to spawn position (feed bag / tool station)
+        this.x = this.spawnX;
+        this.y = this.spawnY;
     }
     
     // Egg basket specific methods
@@ -228,10 +233,10 @@ class ToolManager {
     update(deltaTime) {
         this.tools.forEach(tool => tool.update(deltaTime));
         
-        // Check for empty tools to respawn
+        // Check for empty tools to respawn at their station
         this.tools.forEach(tool => {
-            if (tool.pickedUp && tool.isEmpty()) {
-                // Reset after being empty
+            if (tool.isEmpty()) {
+                // Reset regardless of picked up state — tool respawns at station
                 tool.reset();
             }
         });
@@ -255,9 +260,24 @@ class ToolManager {
     
     draw(ctx) {
         this.tools.forEach(tool => tool.draw(ctx));
+
+        // Draw feed bag station label at bottom-right
+        const foodTool = this.getToolByType('foodBasket');
+        if (foodTool && !foodTool.pickedUp) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('FEED BAG', foodTool.x, foodTool.y + 25);
+            ctx.restore();
+        }
     }
     
     reset() {
         this.tools.forEach(tool => tool.reset());
     }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Tool, ToolManager };
 }

@@ -210,3 +210,7 @@ class Collision {
 if (typeof window !== 'undefined') {
     window.Collision = Collision;
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Collision };
+}
